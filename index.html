@@ -11,7 +11,6 @@
         margin: 0;
         padding: 0;
       }
-
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: #0d0f14;
@@ -21,8 +20,6 @@
         display: flex;
         flex-direction: column;
       }
-
-      /* ── Header ── */
       header {
         display: flex;
         align-items: center;
@@ -71,16 +68,11 @@
         cursor: pointer;
         outline: none;
       }
-      select:focus {
-        border-color: rgba(255, 255, 255, 0.3);
-      }
       input[type="range"] {
         padding: 0;
         width: 80px;
         accent-color: #6366f1;
       }
-
-      /* ── Stats bar ── */
       .stats-bar {
         display: flex;
         gap: 20px;
@@ -88,6 +80,7 @@
         background: rgba(255, 255, 255, 0.02);
         border-bottom: 0.5px solid rgba(255, 255, 255, 0.06);
         flex-shrink: 0;
+        flex-wrap: wrap;
       }
       .stat {
         font-size: 11px;
@@ -97,16 +90,12 @@
         color: #c4c9d4;
         font-weight: 500;
       }
-
-      /* ── Main layout ── */
       .main {
         display: flex;
         flex: 1;
         overflow: hidden;
         position: relative;
       }
-
-      /* ── Canvas ── */
       #canvas {
         flex: 1;
         position: relative;
@@ -117,15 +106,37 @@
         height: 100%;
         display: block;
       }
+
       .links line {
         stroke: rgba(255, 255, 255, 0.06);
         stroke-width: 0.5;
         transition: stroke 0.15s;
       }
       .links line.highlighted {
-        stroke: rgba(255, 255, 255, 0.35);
-        stroke-width: 1;
+        stroke: rgba(255, 255, 255, 0.4);
+        stroke-width: 1.2;
       }
+
+      /* landmark edges glow */
+      .links line.landmark-edge {
+        stroke: #fbbf24;
+        stroke-width: 1.5;
+        filter: drop-shadow(0 0 3px #fbbf24) drop-shadow(0 0 6px #f59e0b);
+        transition: opacity 0.15s;
+      }
+      .links line.landmark-edge.highlighted {
+        stroke: #fde68a;
+        stroke-width: 2.5;
+        filter: drop-shadow(0 0 6px #fbbf24) drop-shadow(0 0 12px #f59e0b);
+      }
+      /* hide landmark glow edges when something else is selected */
+      .links line.landmark-edge.dimmed-edge {
+        stroke: rgba(255, 255, 255, 0.06);
+        stroke-width: 0.5;
+        filter: none;
+        opacity: 0.3;
+      }
+
       .node circle {
         cursor: pointer;
         stroke-width: 1;
@@ -135,10 +146,16 @@
         stroke-width: 2;
       }
       .node.dimmed circle {
-        opacity: 0.1;
+        opacity: 0.08;
       }
       .node.dimmed text {
-        opacity: 0.05;
+        opacity: 0.03;
+      }
+      /* suppress glow rings when node is dimmed */
+      .node.landmark.dimmed circle.glow-ring,
+      .node.landmark.dimmed circle.glow-ring2 {
+        opacity: 0 !important;
+        animation: none !important;
       }
       .node text {
         font-size: 9px;
@@ -147,7 +164,45 @@
         dominant-baseline: central;
       }
 
-      /* ── Tooltip ── */
+      /* landmark node glow ring */
+      .node.landmark circle.glow-ring {
+        fill: none;
+        stroke: #fbbf24;
+        stroke-width: 2;
+        opacity: 0.85;
+        animation: pulse-ring 2s ease-in-out infinite;
+      }
+      @keyframes pulse-ring {
+        0%,
+        100% {
+          r: var(--base-r-plus);
+          opacity: 0.85;
+          stroke-width: 2;
+        }
+        50% {
+          r: var(--base-r-plus2);
+          opacity: 0.4;
+          stroke-width: 1;
+        }
+      }
+      .node.landmark circle.glow-ring2 {
+        fill: none;
+        stroke: #f59e0b;
+        stroke-width: 1;
+        opacity: 0.4;
+        animation: pulse-ring2 2s ease-in-out infinite;
+        animation-delay: 0.6s;
+      }
+      @keyframes pulse-ring2 {
+        0%,
+        100% {
+          opacity: 0.4;
+        }
+        50% {
+          opacity: 0.1;
+        }
+      }
+
       #tooltip {
         position: absolute;
         background: #1a1d24;
@@ -156,7 +211,7 @@
         padding: 10px 14px;
         font-size: 12px;
         pointer-events: none;
-        max-width: 240px;
+        max-width: 260px;
         display: none;
         z-index: 100;
         line-height: 1.5;
@@ -173,14 +228,18 @@
         color: #9ca3af;
         font-size: 11px;
       }
+      #tooltip .tt-landmark {
+        color: #fbbf24;
+        font-size: 11px;
+        font-weight: 500;
+        margin-top: 3px;
+      }
 
-      /* ── Sidebar ── */
       #sidebar {
         width: 300px;
         flex-shrink: 0;
         border-left: 0.5px solid rgba(255, 255, 255, 0.08);
         overflow-y: auto;
-        padding: 0;
         display: flex;
         flex-direction: column;
         background: #0d0f14;
@@ -197,9 +256,6 @@
         padding: 24px;
         text-align: center;
       }
-      .sidebar-empty svg {
-        opacity: 0.3;
-      }
       .sidebar-header {
         padding: 16px 18px 12px;
         border-bottom: 0.5px solid rgba(255, 255, 255, 0.07);
@@ -207,6 +263,18 @@
         top: 0;
         background: #0d0f14;
         z-index: 10;
+      }
+      .landmark-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 10px;
+        color: #fbbf24;
+        background: rgba(251, 191, 36, 0.1);
+        border: 0.5px solid rgba(251, 191, 36, 0.3);
+        border-radius: 4px;
+        padding: 2px 7px;
+        margin-bottom: 6px;
       }
       .sidebar-title {
         font-size: 13px;
@@ -252,9 +320,6 @@
         font-size: 16px;
         font-weight: 500;
         color: #e2e4e9;
-      }
-      .meta-value.small {
-        font-size: 13px;
       }
       .section-label {
         font-size: 10px;
@@ -340,17 +405,27 @@
         border-color: rgba(99, 102, 241, 0.4);
         color: #c4c9d4;
       }
-      .conn-item .conn-year {
+      .conn-item.is-landmark {
+        border-color: rgba(251, 191, 36, 0.25);
+      }
+      .conn-item.is-landmark:hover {
+        border-color: rgba(251, 191, 36, 0.6);
+      }
+      .conn-year {
         color: #6b7280;
         font-size: 10px;
       }
+      .conn-lm-tag {
+        font-size: 10px;
+        color: #fbbf24;
+        margin-left: 4px;
+      }
 
-      /* ── Legend ── */
       #legend {
         position: absolute;
         bottom: 16px;
         left: 16px;
-        background: rgba(13, 15, 20, 0.9);
+        background: rgba(13, 15, 20, 0.92);
         border: 0.5px solid rgba(255, 255, 255, 0.1);
         border-radius: 8px;
         padding: 10px 14px;
@@ -388,8 +463,25 @@
         background: rgba(255, 255, 255, 0.2);
         flex-shrink: 0;
       }
+      .legend-landmark-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        border-top: 0.5px solid rgba(255, 255, 255, 0.07);
+        padding-top: 10px;
+      }
+      .legend-glow-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #fbbf24;
+        box-shadow:
+          0 0 6px #fbbf24,
+          0 0 12px #f59e0b;
+        flex-shrink: 0;
+      }
 
-      /* ── Loading ── */
       #loading {
         position: absolute;
         inset: 0;
@@ -417,7 +509,6 @@
         }
       }
 
-      /* ── Zoom controls ── */
       .zoom-controls {
         position: absolute;
         top: 12px;
@@ -444,6 +535,40 @@
       .zoom-btn:hover {
         background: #222530;
       }
+
+      /* landmark toggle button */
+      .toggle-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        padding: 4px 10px;
+        background: rgba(251, 191, 36, 0.08);
+        border: 0.5px solid rgba(251, 191, 36, 0.3);
+        border-radius: 6px;
+        color: #fbbf24;
+        cursor: pointer;
+        transition: background 0.12s;
+      }
+      .toggle-btn:hover {
+        background: rgba(251, 191, 36, 0.15);
+      }
+      .toggle-btn.off {
+        background: rgba(255, 255, 255, 0.03);
+        border-color: rgba(255, 255, 255, 0.1);
+        color: #6b7280;
+      }
+      .dot-glow {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #fbbf24;
+        box-shadow: 0 0 5px #fbbf24;
+      }
+      .dot-glow.off {
+        background: #4b5563;
+        box-shadow: none;
+      }
     </style>
   </head>
   <body>
@@ -451,11 +576,19 @@
       <div>
         <div class="header-title">Evolutionary Biology · Citation Network</div>
         <div class="header-sub">
-          Force-directed · nodes sized by citations · colored by publication
-          year
+          Force-directed · sized by citations · colored by year · landmark
+          papers glow
         </div>
       </div>
       <div class="header-controls">
+        <button
+          class="toggle-btn"
+          id="landmarkToggle"
+          onclick="toggleLandmarks()"
+        >
+          <div class="dot-glow" id="landmarkDot"></div>
+          Landmark papers
+        </button>
         <div class="control-group">
           <label>Link strength</label>
           <input
@@ -488,11 +621,10 @@
           </select>
         </div>
         <div class="control-group">
-          <label>Search</label>
           <input
             type="text"
             id="searchBox"
-            placeholder="title / year…"
+            placeholder="Search title / year…"
             style="
               background: #1a1d24;
               border: 0.5px solid rgba(255, 255, 255, 0.12);
@@ -513,6 +645,7 @@
       <div class="stat">Edges <span id="statEdges">—</span></div>
       <div class="stat">Total citations <span id="statCitations">—</span></div>
       <div class="stat">Year range <span id="statYears">—</span></div>
+      <div class="stat">Landmark papers <span id="statLandmarks">—</span></div>
     </div>
 
     <div class="main">
@@ -527,8 +660,7 @@
           <div class="legend-title">Publication year</div>
           <div class="legend-gradient" id="legendGradient"></div>
           <div class="legend-labels">
-            <span id="legendMin"></span>
-            <span id="legendMax"></span>
+            <span id="legendMin"></span><span id="legendMax"></span>
           </div>
           <div class="legend-size-row">
             <div class="legend-circle" style="width: 6px; height: 6px"></div>
@@ -538,6 +670,10 @@
               style="width: 14px; height: 14px; margin-left: 4px"
             ></div>
             <span>many</span>
+          </div>
+          <div class="legend-landmark-row">
+            <div class="legend-glow-dot"></div>
+            <span style="color: #fbbf24">Landmark paper</span>
           </div>
         </div>
 
@@ -566,6 +702,7 @@
             fill="none"
             stroke="currentColor"
             stroke-width="1.2"
+            opacity="0.3"
           >
             <circle cx="12" cy="12" r="3" />
             <circle cx="4" cy="6" r="2" />
@@ -604,30 +741,127 @@
         "#92400e",
       ];
 
+      const LANDMARK_META = {
+        W4205193750: {
+          year: 1798,
+          title: "An Essay on the Principle of Population",
+          author: "Malthus",
+        },
+        W1977070125: {
+          year: 1809,
+          title: "Philosophie zoologique",
+          author: "Lamarck",
+        },
+        W2295627222: {
+          year: 1855,
+          title:
+            "On the Law which has Regulated the Introduction of New Species",
+          author: "Wallace",
+        },
+        W1965195490: {
+          year: 1865,
+          title: "On the Phenomena of Variation…Papilionidæ",
+          author: "Wallace",
+        },
+        W2497906408: {
+          year: 1901,
+          title: "Die Mutationstheorie (Vol 1 & 2)",
+          author: "Hugo de Vries",
+        },
+        W2066958059: {
+          year: 1929,
+          title: "The Evolution of Dominance",
+          author: "Sewall Wright",
+        },
+        W2171463101: {
+          year: 1931,
+          title: "Evolution in Mendelian Populations",
+          author: "Sewall Wright",
+        },
+        W2007325254: {
+          year: 1973,
+          title: "Slightly deleterious mutant substitutions in evolution",
+          author: "Tomoko Ohta",
+        },
+        W2009531441: {
+          year: 1858,
+          title: "On the Tendency of Species to form Varieties…",
+          author: "Darwin & Wallace",
+        },
+        W2745143329: {
+          year: 1860,
+          title: "On the origin of species",
+          author: "Charles Darwin",
+        },
+        W3119707353: {
+          year: 1866,
+          title: "Versuche über Pflanzen-Hybriden",
+          author: "Gregor Mendel",
+        },
+        W2126466006: {
+          year: 1953,
+          title: "Molecular Structure of Nucleic Acids: DNA",
+          author: "Watson & Crick",
+        },
+        W2303043072: {
+          year: 1919,
+          title: "Correlation between Relatives on Mendelian Inheritance",
+          author: "R. A. Fisher",
+        },
+        W1493831303: {
+          year: 1966,
+          title: "The Causes of Evolution",
+          author: "J. B. S. Haldane",
+        },
+        W1547103805: {
+          year: 1967,
+          title: "On the Origin of Mitosing Cells",
+          author: "Lynn Margulis",
+        },
+        W3135630760: {
+          year: 1972,
+          title: "Punctuated equilibria",
+          author: "Eldredge & Gould",
+        },
+        W1599192329: {
+          year: 1952,
+          title: "Genetics and the Origin of Species",
+          author: "Dobzhansky",
+        },
+        W1993351732: {
+          year: 1968,
+          title: "Evolutionary Rate at the Molecular Level",
+          author: "Motoo Kimura",
+        },
+        W1512943765: {
+          year: 1965,
+          title: "Molecules as documents of evolutionary history",
+          author: "Zuckerkandl & Pauling",
+        },
+      };
+      const LANDMARK_IDS = new Set(Object.keys(LANDMARK_META));
+
       let allData = [],
         simulation,
         svgSel,
         linkSel,
         nodeSel,
         zoomBehavior;
-      let activeNodeId = null;
+      let showLandmarks = true;
 
       function yearColor(year, minY, maxY) {
         const t = (year - minY) / Math.max(1, maxY - minY);
         const i = Math.floor(t * (YEAR_COLORS.length - 1));
         return YEAR_COLORS[Math.min(i, YEAR_COLORS.length - 1)];
       }
-
       function nodeRadius(d) {
         return Math.max(
           4,
           Math.min(22, 3 + Math.sqrt(d.cited_by_count || 0) * 0.18),
         );
       }
-
       function shortId(url) {
-        if (!url) return "";
-        return url.split("/").pop();
+        return url ? url.split("/").pop().toUpperCase() : "";
       }
 
       function buildNetwork(data, minCit) {
@@ -636,14 +870,13 @@
             ? data.filter((d) => (d.cited_by_count || 0) >= minCit)
             : data;
         const idSet = new Set(filtered.map((d) => shortId(d.id)));
-
         const nodes = filtered.map((d) => ({
           ...d,
           _id: shortId(d.id),
           cited_by_count: d.cited_by_count || 0,
           publication_year: d.publication_year || 2000,
+          isLandmark: LANDMARK_IDS.has(shortId(d.id)),
         }));
-
         const links = [];
         nodes.forEach((d) => {
           const bib = d.bibliography;
@@ -651,11 +884,16 @@
           bib.forEach((ref) => {
             const refId = shortId(ref);
             if (idSet.has(refId) && refId !== d._id) {
-              links.push({ source: d._id, target: refId });
+              const srcLm = LANDMARK_IDS.has(d._id);
+              const tgtLm = LANDMARK_IDS.has(refId);
+              links.push({
+                source: d._id,
+                target: refId,
+                isLandmarkEdge: srcLm || tgtLm,
+              });
             }
           });
         });
-
         return { nodes, links };
       }
 
@@ -666,6 +904,7 @@
         const minY = d3.min(nodes, (d) => d.publication_year);
         const maxY = d3.max(nodes, (d) => d.publication_year);
         const totalCit = d3.sum(nodes, (d) => d.cited_by_count);
+        const lmCount = nodes.filter((d) => d.isLandmark).length;
 
         document.getElementById("statNodes").textContent =
           nodes.length.toLocaleString();
@@ -674,8 +913,8 @@
         document.getElementById("statCitations").textContent =
           totalCit.toLocaleString();
         document.getElementById("statYears").textContent = `${minY} – ${maxY}`;
-        document.getElementById("legendMin").textContent = minY;
-        document.getElementById("legendMax").textContent = maxY;
+        document.getElementById("statLandmarks").textContent =
+          `${lmCount} / ${LANDMARK_IDS.size}`;
 
         const gradStops = YEAR_COLORS.map(
           (c, i) =>
@@ -683,6 +922,8 @@
         ).join(",");
         document.getElementById("legendGradient").style.background =
           `linear-gradient(to right, ${gradStops})`;
+        document.getElementById("legendMin").textContent = minY;
+        document.getElementById("legendMax").textContent = maxY;
 
         const W = document.getElementById("canvas").clientWidth;
         const H = document.getElementById("canvas").clientHeight;
@@ -690,76 +931,107 @@
         svgSel = d3.select("#svg").attr("width", W).attr("height", H);
         svgSel.selectAll("*").remove();
 
-        const g = svgSel.append("g");
+        const defs = svgSel.append("defs");
+        defs.append("filter").attr("id", "glow-filter").html(`
+    <feGaussianBlur stdDeviation="3" result="blur"/>
+    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+  `);
 
+        const g = svgSel.append("g");
         zoomBehavior = d3
           .zoom()
           .scaleExtent([0.05, 8])
           .on("zoom", (e) => g.attr("transform", e.transform));
         svgSel.call(zoomBehavior);
 
-        linkSel = g
-          .append("g")
-          .attr("class", "links")
-          .selectAll("line")
-          .data(links)
-          .join("line");
+        // split links: regular first, landmark on top
+        const regularLinks = links.filter((l) => !l.isLandmarkEdge);
+        const lmLinks = links.filter((l) => l.isLandmarkEdge);
+
+        const linkG = g.append("g").attr("class", "links");
+        const regLinkSel = linkG
+          .selectAll("line.reg")
+          .data(regularLinks)
+          .join("line")
+          .attr("class", "reg");
+        const lmLinkSel = linkG
+          .selectAll("line.lm")
+          .data(lmLinks)
+          .join("line")
+          .attr("class", (d) => (showLandmarks ? "lm landmark-edge" : "lm"));
+
+        linkSel = {
+          reg: regLinkSel,
+          lm: lmLinkSel,
+          all: linkG.selectAll("line"),
+        };
 
         const nodeById = {};
         nodes.forEach((n) => (nodeById[n._id] = n));
-
         const tooltip = document.getElementById("tooltip");
 
-        nodeSel = g
-          .append("g")
-          .attr("class", "nodes")
-          .selectAll("g")
-          .data(nodes, (d) => d._id)
-          .join("g")
-          .attr("class", "node")
-          .call(
-            d3
-              .drag()
-              .on("start", (e, d) => {
-                if (!e.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-              })
-              .on("drag", (e, d) => {
-                d.fx = e.x;
-                d.fy = e.y;
-              })
-              .on("end", (e, d) => {
-                if (!e.active) simulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
-              }),
-          )
-          .on("mouseover", (e, d) => {
-            tooltip.style.display = "block";
-            tooltip.innerHTML = `<strong>${d.title || "Untitled"}</strong>
-        <div class="tt-row">${d.publication_year} · ${(d.cited_by_count || 0).toLocaleString()} citations</div>
-        <div class="tt-row">${d.authors_count || 0} author${d.authors_count !== 1 ? "s" : ""}</div>`;
-          })
-          .on("mousemove", (e) => {
-            const rect = document
-              .getElementById("canvas")
-              .getBoundingClientRect();
-            let tx = e.clientX - rect.left + 14,
-              ty = e.clientY - rect.top - 10;
-            if (tx + 244 > W) tx = e.clientX - rect.left - 254;
-            tooltip.style.left = tx + "px";
-            tooltip.style.top = ty + "px";
-          })
-          .on("mouseout", () => {
-            tooltip.style.display = "none";
-          })
-          .on("click", (e, d) => {
-            e.stopPropagation();
-            selectNode(d, nodes, links, nodeById, minY, maxY);
-          });
+        // render regular nodes first, landmarks on top
+        const regularNodes = nodes.filter((d) => !d.isLandmark);
+        const lmNodes = nodes.filter((d) => d.isLandmark);
 
-        nodeSel
+        function makeNodes(data, cls) {
+          return g
+            .append("g")
+            .attr("class", `nodes ${cls}`)
+            .selectAll("g")
+            .data(data, (d) => d._id)
+            .join("g")
+            .attr("class", (d) => `node${d.isLandmark ? " landmark" : ""}`)
+            .call(
+              d3
+                .drag()
+                .on("start", (e, d) => {
+                  if (!e.active) simulation.alphaTarget(0.3).restart();
+                  d.fx = d.x;
+                  d.fy = d.y;
+                })
+                .on("drag", (e, d) => {
+                  d.fx = e.x;
+                  d.fy = e.y;
+                })
+                .on("end", (e, d) => {
+                  if (!e.active) simulation.alphaTarget(0);
+                  d.fx = null;
+                  d.fy = null;
+                }),
+            )
+            .on("mouseover", (e, d) => {
+              const lm = LANDMARK_META[d._id];
+              tooltip.style.display = "block";
+              tooltip.innerHTML = `<strong>${d.title || "Untitled"}</strong>
+          <div class="tt-row">${d.publication_year} · ${(d.cited_by_count || 0).toLocaleString()} citations</div>
+          <div class="tt-row">${d.authors_count || 0} author${d.authors_count !== 1 ? "s" : ""}</div>
+          ${lm ? `<div class="tt-landmark">★ Landmark · ${lm.author}</div>` : ""}`;
+            })
+            .on("mousemove", (e) => {
+              const rect = document
+                .getElementById("canvas")
+                .getBoundingClientRect();
+              let tx = e.clientX - rect.left + 14,
+                ty = e.clientY - rect.top - 10;
+              if (tx + 264 > W) tx = e.clientX - rect.left - 274;
+              tooltip.style.left = tx + "px";
+              tooltip.style.top = ty + "px";
+            })
+            .on("mouseout", () => {
+              tooltip.style.display = "none";
+            })
+            .on("click", (e, d) => {
+              e.stopPropagation();
+              selectNode(d, nodes, links, nodeById, minY, maxY);
+            });
+        }
+
+        const regNodeSel = makeNodes(regularNodes, "regular");
+        const lmNodeSel = makeNodes(lmNodes, "landmarks");
+        nodeSel = g.selectAll(".node");
+
+        regNodeSel
           .append("circle")
           .attr("r", (d) => nodeRadius(d))
           .attr("fill", (d) => yearColor(d.publication_year, minY, maxY))
@@ -768,10 +1040,29 @@
           )
           .attr("stroke-width", 0.8);
 
-        svgSel.on("click", () => clearSelection(nodes));
+        // landmark nodes: glow rings + main circle
+        lmNodeSel.each(function (d) {
+          const el = d3.select(this);
+          const r = nodeRadius(d);
+          el.append("circle")
+            .attr("class", "glow-ring2")
+            .attr("r", r + 6)
+            .style("--base-r-plus", r + 5 + "px")
+            .style("--base-r-plus2", r + 9 + "px");
+          el.append("circle")
+            .attr("class", "glow-ring")
+            .attr("r", r + 4)
+            .style("--base-r-plus", r + 4 + "px")
+            .style("--base-r-plus2", r + 7 + "px");
+          el.append("circle")
+            .attr("r", r)
+            .attr("fill", (d) => yearColor(d.publication_year, minY, maxY))
+            .attr("stroke", "#fbbf24")
+            .attr("stroke-width", 1.5)
+            .attr("filter", "url(#glow-filter)");
+        });
 
-        const chargeVal = +document.getElementById("chargeSlider").value;
-        const linkVal = +document.getElementById("linkStrength").value;
+        svgSel.on("click", () => clearSelection(nodes));
 
         if (simulation) simulation.stop();
         simulation = d3
@@ -782,16 +1073,26 @@
               .forceLink(links)
               .id((d) => d._id)
               .distance(60)
-              .strength(linkVal),
+              .strength(+document.getElementById("linkStrength").value),
           )
-          .force("charge", d3.forceManyBody().strength(chargeVal))
+          .force(
+            "charge",
+            d3
+              .forceManyBody()
+              .strength(+document.getElementById("chargeSlider").value),
+          )
           .force("center", d3.forceCenter(W / 2, H / 2))
           .force(
             "collision",
             d3.forceCollide((d) => nodeRadius(d) + 2),
           )
           .on("tick", () => {
-            linkSel
+            regLinkSel
+              .attr("x1", (d) => d.source.x)
+              .attr("y1", (d) => d.source.y)
+              .attr("x2", (d) => d.target.x)
+              .attr("y2", (d) => d.target.y);
+            lmLinkSel
               .attr("x1", (d) => d.source.x)
               .attr("y1", (d) => d.source.y)
               .attr("x2", (d) => d.target.x)
@@ -803,12 +1104,25 @@
           });
 
         document.getElementById("loading").style.display = "flex";
-        document.getElementById("loading").querySelector("div+div") && null;
+      }
+
+      function toggleLandmarks() {
+        showLandmarks = !showLandmarks;
+        const btn = document.getElementById("landmarkToggle");
+        const dot = document.getElementById("landmarkDot");
+        btn.classList.toggle("off", !showLandmarks);
+        dot.classList.toggle("off", !showLandmarks);
+        if (linkSel) {
+          linkSel.lm.attr("class", showLandmarks ? "lm landmark-edge" : "lm");
+        }
+        if (nodeSel) {
+          svgSel
+            .selectAll(".node.landmark")
+            .style("display", showLandmarks ? null : "none");
+        }
       }
 
       function selectNode(d, nodes, links, nodeById, minY, maxY) {
-        activeNodeId = d._id;
-
         const connectedIds = new Set();
         links.forEach((l) => {
           const sid = typeof l.source === "object" ? l.source._id : l.source;
@@ -821,19 +1135,36 @@
           "dimmed",
           (n) => n._id !== d._id && !connectedIds.has(n._id),
         );
-        linkSel.classed("highlighted", (l) => {
-          const sid = typeof l.source === "object" ? l.source._id : l.source;
-          const tid = typeof l.target === "object" ? l.target._id : l.target;
-          return sid === d._id || tid === d._id;
-        });
 
+        if (linkSel) {
+          linkSel.reg.classed("highlighted", (l) => {
+            const s = typeof l.source === "object" ? l.source._id : l.source;
+            const t = typeof l.target === "object" ? l.target._id : l.target;
+            return s === d._id || t === d._id;
+          });
+          linkSel.lm
+            .classed("highlighted", (l) => {
+              const s = typeof l.source === "object" ? l.source._id : l.source;
+              const t = typeof l.target === "object" ? l.target._id : l.target;
+              return s === d._id || t === d._id;
+            })
+            .classed("dimmed-edge", (l) => {
+              const s = typeof l.source === "object" ? l.source._id : l.source;
+              const t = typeof l.target === "object" ? l.target._id : l.target;
+              return s !== d._id && t !== d._id;
+            });
+        }
         showSidebar(d, connectedIds, nodeById, minY, maxY);
       }
 
       function clearSelection(nodes) {
-        activeNodeId = null;
         if (nodeSel) nodeSel.classed("dimmed", false);
-        if (linkSel) linkSel.classed("highlighted", false);
+        if (linkSel) {
+          linkSel.reg.classed("highlighted", false);
+          linkSel.lm
+            .classed("highlighted", false)
+            .classed("dimmed-edge", false);
+        }
         document.getElementById("sidebarEmpty").style.display = "flex";
         document.getElementById("sidebarContent").style.display = "none";
       }
@@ -842,7 +1173,6 @@
         document.getElementById("sidebarEmpty").style.display = "none";
         const sc = document.getElementById("sidebarContent");
         sc.style.display = "flex";
-
         const oa = (() => {
           try {
             return JSON.parse(d.open_access || "{}");
@@ -862,13 +1192,12 @@
           : cnp.is_in_top_10_percent
             ? "Top 10%"
             : null;
-
+        const lm = LANDMARK_META[d._id];
         const citsByYear = Array.isArray(d.citations_by_year_post_pub)
           ? d.citations_by_year_post_pub
           : [];
         const recentCits = citsByYear.slice(-10);
         const maxBarCit = Math.max(1, ...recentCits.map((r) => r.n_citations));
-
         const connNodes = [...connectedIds]
           .map((id) => nodeById[id])
           .filter(Boolean)
@@ -877,29 +1206,17 @@
 
         sc.innerHTML = `
     <div class="sidebar-header">
+      ${lm ? `<div class="landmark-badge">★ Landmark · ${lm.author} · ${lm.year}</div>` : ""}
       <div class="sidebar-title">${d.title || "Untitled"}</div>
       ${d.doi ? `<a class="sidebar-doi" href="${d.doi}" target="_blank">${d.doi.replace("https://doi.org/", "doi:")}</a>` : ""}
     </div>
     <div class="sidebar-body">
       <div class="meta-grid">
-        <div class="meta-card">
-          <div class="meta-label">Citations</div>
-          <div class="meta-value">${(d.cited_by_count || 0).toLocaleString()}</div>
-        </div>
-        <div class="meta-card">
-          <div class="meta-label">Year</div>
-          <div class="meta-value">${d.publication_year || "—"}</div>
-        </div>
-        <div class="meta-card">
-          <div class="meta-label">FWCI</div>
-          <div class="meta-value">${d.fwci != null ? (+d.fwci).toFixed(2) : "—"}</div>
-        </div>
-        <div class="meta-card">
-          <div class="meta-label">Authors</div>
-          <div class="meta-value">${d.authors_count ?? "—"}</div>
-        </div>
+        <div class="meta-card"><div class="meta-label">Citations</div><div class="meta-value">${(d.cited_by_count || 0).toLocaleString()}</div></div>
+        <div class="meta-card"><div class="meta-label">Year</div><div class="meta-value">${d.publication_year || "—"}</div></div>
+        <div class="meta-card"><div class="meta-label">FWCI</div><div class="meta-value">${d.fwci != null ? (+d.fwci).toFixed(2) : "—"}</div></div>
+        <div class="meta-card"><div class="meta-label">Authors</div><div class="meta-value">${d.authors_count ?? "—"}</div></div>
       </div>
-
       <div class="tag-row">
         ${oa.is_oa ? '<span class="tag oa">Open access</span>' : '<span class="tag closed">Closed</span>'}
         ${topPct ? `<span class="tag" style="color:#a78bfa;border-color:rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">${topPct}</span>` : ""}
@@ -907,7 +1224,6 @@
         ${d.language ? `<span class="tag">${d.language.toUpperCase()}</span>` : ""}
         ${d.is_retracted === "true" ? '<span class="tag closed">Retracted</span>' : ""}
       </div>
-
       ${
         recentCits.length
           ? `
@@ -926,7 +1242,6 @@
       </div>`
           : ""
       }
-
       ${
         connNodes.length
           ? `
@@ -935,8 +1250,8 @@
         ${connNodes
           .map(
             (n) => `
-          <div class="conn-item" onclick="highlightFromSidebar('${n._id}')">
-            <div>${n.title || n._id}</div>
+          <div class="conn-item${n.isLandmark ? " is-landmark" : ""}" onclick="highlightFromSidebar('${n._id}')">
+            <div>${n.title || n._id}${n.isLandmark ? '<span class="conn-lm-tag">★</span>' : ""}</div>
             <div class="conn-year">${n.publication_year} · ${(n.cited_by_count || 0).toLocaleString()} citations</div>
           </div>`,
           )
@@ -945,20 +1260,19 @@
       </div>`
           : '<div style="font-size:12px;color:#6b7280;">No connections within dataset</div>'
       }
-    </div>
-  `;
+    </div>`;
       }
 
       window.highlightFromSidebar = function (id) {
         if (!nodeSel) return;
         nodeSel.each(function (d) {
           if (d._id === id) {
-            const event = new MouseEvent("click", { bubbles: true });
-            this.dispatchEvent(event);
-            svgSel
-              .transition()
-              .duration(600)
-              .call(zoomBehavior.translateTo, d.x, d.y);
+            this.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            if (zoomBehavior && svgSel)
+              svgSel
+                .transition()
+                .duration(600)
+                .call(zoomBehavior.translateTo, d.x, d.y);
           }
         });
       };
@@ -984,7 +1298,6 @@
         .addEventListener("change", (e) => {
           if (allData.length) render(allData, +e.target.value);
         });
-
       document.getElementById("linkStrength").addEventListener("input", () => {
         if (simulation) {
           simulation
@@ -1001,13 +1314,11 @@
           simulation.alpha(0.3).restart();
         }
       });
-
       let searchTimer;
       document.getElementById("searchBox").addEventListener("input", (e) => {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => applySearch(e.target.value.trim()), 250);
       });
-
       document.getElementById("zoomIn").onclick = () =>
         svgSel.transition().duration(300).call(zoomBehavior.scaleBy, 1.5);
       document.getElementById("zoomOut").onclick = () =>
