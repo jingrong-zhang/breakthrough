@@ -1179,6 +1179,46 @@
           })
           .on("end", () => {
             document.getElementById("loading").style.display = "none";
+
+            // find bounding box of all nodes for wide view
+            const padding = 80;
+            const xs = nodes.map((d) => d.x),
+              ys = nodes.map((d) => d.y);
+            const x0 = Math.min(...xs),
+              x1 = Math.max(...xs);
+            const y0 = Math.min(...ys),
+              y1 = Math.max(...ys);
+            const fullScale = Math.min(
+              W / (x1 - x0 + padding * 2),
+              H / (y1 - y0 + padding * 2),
+            );
+            const fullTx = W / 2 - fullScale * ((x0 + x1) / 2);
+            const fullTy = H / 2 - fullScale * ((y0 + y1) / 2);
+            const fullTransform = d3.zoomIdentity
+              .translate(fullTx, fullTy)
+              .scale(fullScale);
+
+            // find dense center: average position of top 10% most-cited nodes
+            const sorted = [...nodes].sort(
+              (a, b) => b.cited_by_count - a.cited_by_count,
+            );
+            const topN = Math.max(10, Math.floor(sorted.length * 0.1));
+            const cx =
+              sorted.slice(0, topN).reduce((s, d) => s + d.x, 0) / topN;
+            const cy =
+              sorted.slice(0, topN).reduce((s, d) => s + d.y, 0) / topN;
+            const targetScale = 0.5;
+            const targetTransform = d3.zoomIdentity
+              .translate(W / 2 - targetScale * cx, H / 2 - targetScale * cy)
+              .scale(targetScale);
+
+            // jump to wide view instantly, then fly in
+            svgSel.call(zoomBehavior.transform, fullTransform);
+            svgSel
+              .transition()
+              .duration(2000)
+              .ease(d3.easeCubicInOut)
+              .call(zoomBehavior.transform, targetTransform);
           });
 
         document.getElementById("loading").style.display = "flex";
