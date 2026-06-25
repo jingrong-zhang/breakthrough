@@ -1,0 +1,1039 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Evolutionary Biology · Citation Network</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0d0f14;
+        color: #e2e4e9;
+        height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ── Header ── */
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 20px;
+        border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
+        flex-shrink: 0;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .header-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #e2e4e9;
+        letter-spacing: 0.02em;
+      }
+      .header-sub {
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 1px;
+      }
+      .header-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .control-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #9ca3af;
+      }
+      .control-group label {
+        white-space: nowrap;
+      }
+      select,
+      input[type="range"] {
+        background: #1a1d24;
+        border: 0.5px solid rgba(255, 255, 255, 0.12);
+        color: #e2e4e9;
+        border-radius: 6px;
+        font-size: 12px;
+        padding: 4px 8px;
+        cursor: pointer;
+        outline: none;
+      }
+      select:focus {
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+      input[type="range"] {
+        padding: 0;
+        width: 80px;
+        accent-color: #6366f1;
+      }
+
+      /* ── Stats bar ── */
+      .stats-bar {
+        display: flex;
+        gap: 20px;
+        padding: 6px 20px;
+        background: rgba(255, 255, 255, 0.02);
+        border-bottom: 0.5px solid rgba(255, 255, 255, 0.06);
+        flex-shrink: 0;
+      }
+      .stat {
+        font-size: 11px;
+        color: #6b7280;
+      }
+      .stat span {
+        color: #c4c9d4;
+        font-weight: 500;
+      }
+
+      /* ── Main layout ── */
+      .main {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* ── Canvas ── */
+      #canvas {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+      #canvas svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .links line {
+        stroke: rgba(255, 255, 255, 0.06);
+        stroke-width: 0.5;
+        transition: stroke 0.15s;
+      }
+      .links line.highlighted {
+        stroke: rgba(255, 255, 255, 0.35);
+        stroke-width: 1;
+      }
+      .node circle {
+        cursor: pointer;
+        stroke-width: 1;
+        transition: opacity 0.15s;
+      }
+      .node circle:hover {
+        stroke-width: 2;
+      }
+      .node.dimmed circle {
+        opacity: 0.1;
+      }
+      .node.dimmed text {
+        opacity: 0.05;
+      }
+      .node text {
+        font-size: 9px;
+        fill: rgba(255, 255, 255, 0.45);
+        pointer-events: none;
+        dominant-baseline: central;
+      }
+
+      /* ── Tooltip ── */
+      #tooltip {
+        position: absolute;
+        background: #1a1d24;
+        border: 0.5px solid rgba(255, 255, 255, 0.14);
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 12px;
+        pointer-events: none;
+        max-width: 240px;
+        display: none;
+        z-index: 100;
+        line-height: 1.5;
+        color: #c4c9d4;
+      }
+      #tooltip strong {
+        color: #e2e4e9;
+        font-weight: 500;
+        display: block;
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+      #tooltip .tt-row {
+        color: #9ca3af;
+        font-size: 11px;
+      }
+
+      /* ── Sidebar ── */
+      #sidebar {
+        width: 300px;
+        flex-shrink: 0;
+        border-left: 0.5px solid rgba(255, 255, 255, 0.08);
+        overflow-y: auto;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        background: #0d0f14;
+      }
+      .sidebar-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #4b5563;
+        font-size: 12px;
+        gap: 8px;
+        padding: 24px;
+        text-align: center;
+      }
+      .sidebar-empty svg {
+        opacity: 0.3;
+      }
+      .sidebar-header {
+        padding: 16px 18px 12px;
+        border-bottom: 0.5px solid rgba(255, 255, 255, 0.07);
+        position: sticky;
+        top: 0;
+        background: #0d0f14;
+        z-index: 10;
+      }
+      .sidebar-title {
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.4;
+        color: #e2e4e9;
+        margin-bottom: 6px;
+      }
+      .sidebar-doi {
+        font-size: 11px;
+        color: #6366f1;
+        word-break: break-all;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .sidebar-doi:hover {
+        text-decoration: underline;
+      }
+      .sidebar-body {
+        padding: 14px 18px;
+        flex: 1;
+      }
+      .meta-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .meta-card {
+        background: #161820;
+        border-radius: 8px;
+        padding: 10px 12px;
+        border: 0.5px solid rgba(255, 255, 255, 0.06);
+      }
+      .meta-label {
+        font-size: 10px;
+        color: #6b7280;
+        margin-bottom: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .meta-value {
+        font-size: 16px;
+        font-weight: 500;
+        color: #e2e4e9;
+      }
+      .meta-value.small {
+        font-size: 13px;
+      }
+      .section-label {
+        font-size: 10px;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+      }
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-bottom: 14px;
+      }
+      .tag {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 0.5px solid rgba(255, 255, 255, 0.1);
+        color: #9ca3af;
+      }
+      .tag.oa {
+        color: #34d399;
+        border-color: rgba(52, 211, 153, 0.25);
+        background: rgba(52, 211, 153, 0.06);
+      }
+      .tag.closed {
+        color: #f87171;
+        border-color: rgba(248, 113, 113, 0.25);
+        background: rgba(248, 113, 113, 0.06);
+      }
+      .mini-chart {
+        margin-bottom: 14px;
+      }
+      .mini-bar-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 3px;
+      }
+      .mini-bar-label {
+        font-size: 10px;
+        color: #6b7280;
+        width: 28px;
+        text-align: right;
+        flex-shrink: 0;
+      }
+      .mini-bar-track {
+        flex: 1;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .mini-bar-fill {
+        height: 100%;
+        border-radius: 2px;
+        background: #6366f1;
+      }
+      .mini-bar-val {
+        font-size: 10px;
+        color: #6b7280;
+        width: 26px;
+        flex-shrink: 0;
+      }
+      .connections-list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .conn-item {
+        font-size: 11px;
+        color: #9ca3af;
+        padding: 7px 10px;
+        background: #161820;
+        border-radius: 6px;
+        border: 0.5px solid rgba(255, 255, 255, 0.05);
+        cursor: pointer;
+        line-height: 1.4;
+        transition: border-color 0.12s;
+      }
+      .conn-item:hover {
+        border-color: rgba(99, 102, 241, 0.4);
+        color: #c4c9d4;
+      }
+      .conn-item .conn-year {
+        color: #6b7280;
+        font-size: 10px;
+      }
+
+      /* ── Legend ── */
+      #legend {
+        position: absolute;
+        bottom: 16px;
+        left: 16px;
+        background: rgba(13, 15, 20, 0.9);
+        border: 0.5px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 11px;
+        color: #9ca3af;
+        pointer-events: none;
+      }
+      .legend-title {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+        margin-bottom: 8px;
+      }
+      .legend-gradient {
+        width: 120px;
+        height: 6px;
+        border-radius: 3px;
+        margin-bottom: 4px;
+      }
+      .legend-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        color: #6b7280;
+      }
+      .legend-size-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .legend-circle {
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        flex-shrink: 0;
+      }
+
+      /* ── Loading ── */
+      #loading {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0d0f14;
+        z-index: 200;
+        gap: 14px;
+        color: #6b7280;
+        font-size: 13px;
+      }
+      .spinner {
+        width: 28px;
+        height: 28px;
+        border: 2px solid rgba(255, 255, 255, 0.08);
+        border-top-color: #6366f1;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ── Zoom controls ── */
+      .zoom-controls {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .zoom-btn {
+        width: 28px;
+        height: 28px;
+        background: #1a1d24;
+        border: 0.5px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        color: #c4c9d4;
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        transition: background 0.12s;
+      }
+      .zoom-btn:hover {
+        background: #222530;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <div class="header-title">Evolutionary Biology · Citation Network</div>
+        <div class="header-sub">
+          Force-directed · nodes sized by citations · colored by publication
+          year
+        </div>
+      </div>
+      <div class="header-controls">
+        <div class="control-group">
+          <label>Link strength</label>
+          <input
+            type="range"
+            id="linkStrength"
+            min="0.1"
+            max="1"
+            step="0.05"
+            value="0.4"
+          />
+        </div>
+        <div class="control-group">
+          <label>Charge</label>
+          <input
+            type="range"
+            id="chargeSlider"
+            min="-300"
+            max="-10"
+            step="10"
+            value="-80"
+          />
+        </div>
+        <div class="control-group">
+          <label>Min citations</label>
+          <select id="minCitations">
+            <option value="0">All</option>
+            <option value="100">≥ 100</option>
+            <option value="500">≥ 500</option>
+            <option value="1000">≥ 1000</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Search</label>
+          <input
+            type="text"
+            id="searchBox"
+            placeholder="title / year…"
+            style="
+              background: #1a1d24;
+              border: 0.5px solid rgba(255, 255, 255, 0.12);
+              color: #e2e4e9;
+              border-radius: 6px;
+              font-size: 12px;
+              padding: 4px 8px;
+              outline: none;
+              width: 160px;
+            "
+          />
+        </div>
+      </div>
+    </header>
+
+    <div class="stats-bar">
+      <div class="stat">Nodes <span id="statNodes">—</span></div>
+      <div class="stat">Edges <span id="statEdges">—</span></div>
+      <div class="stat">Total citations <span id="statCitations">—</span></div>
+      <div class="stat">Year range <span id="statYears">—</span></div>
+    </div>
+
+    <div class="main">
+      <div id="canvas">
+        <div id="loading">
+          <div class="spinner"></div>
+          Building network…
+        </div>
+        <svg id="svg"></svg>
+
+        <div id="legend">
+          <div class="legend-title">Publication year</div>
+          <div class="legend-gradient" id="legendGradient"></div>
+          <div class="legend-labels">
+            <span id="legendMin"></span>
+            <span id="legendMax"></span>
+          </div>
+          <div class="legend-size-row">
+            <div class="legend-circle" style="width: 6px; height: 6px"></div>
+            <span>few citations</span>
+            <div
+              class="legend-circle"
+              style="width: 14px; height: 14px; margin-left: 4px"
+            ></div>
+            <span>many</span>
+          </div>
+        </div>
+
+        <div class="zoom-controls">
+          <button class="zoom-btn" id="zoomIn">+</button>
+          <button class="zoom-btn" id="zoomOut">−</button>
+          <button
+            class="zoom-btn"
+            id="zoomReset"
+            title="Reset"
+            style="font-size: 11px"
+          >
+            ⤢
+          </button>
+        </div>
+
+        <div id="tooltip"></div>
+      </div>
+
+      <div id="sidebar">
+        <div class="sidebar-empty" id="sidebarEmpty">
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.2"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <circle cx="4" cy="6" r="2" />
+            <circle cx="20" cy="6" r="2" />
+            <circle cx="4" cy="18" r="2" />
+            <circle cx="20" cy="18" r="2" />
+            <line x1="6" y1="7" x2="10" y2="11" />
+            <line x1="18" y1="7" x2="14" y2="11" />
+            <line x1="6" y1="17" x2="10" y2="13" />
+            <line x1="18" y1="17" x2="14" y2="13" />
+          </svg>
+          Click a node to explore its details and connections
+        </div>
+        <div
+          id="sidebarContent"
+          style="display: none; flex-direction: column; flex: 1"
+        ></div>
+      </div>
+    </div>
+
+    <script>
+      const YEAR_COLORS = [
+        "#312e81",
+        "#4338ca",
+        "#6366f1",
+        "#818cf8",
+        "#a5b4fc",
+        "#c7d2fe",
+        "#e0e7ff",
+        "#fef3c7",
+        "#fde68a",
+        "#fbbf24",
+        "#f59e0b",
+        "#d97706",
+        "#b45309",
+        "#92400e",
+      ];
+
+      let allData = [],
+        simulation,
+        svgSel,
+        linkSel,
+        nodeSel,
+        zoomBehavior;
+      let activeNodeId = null;
+
+      function yearColor(year, minY, maxY) {
+        const t = (year - minY) / Math.max(1, maxY - minY);
+        const i = Math.floor(t * (YEAR_COLORS.length - 1));
+        return YEAR_COLORS[Math.min(i, YEAR_COLORS.length - 1)];
+      }
+
+      function nodeRadius(d) {
+        return Math.max(
+          4,
+          Math.min(22, 3 + Math.sqrt(d.cited_by_count || 0) * 0.18),
+        );
+      }
+
+      function shortId(url) {
+        if (!url) return "";
+        return url.split("/").pop();
+      }
+
+      function buildNetwork(data, minCit) {
+        const filtered =
+          minCit > 0
+            ? data.filter((d) => (d.cited_by_count || 0) >= minCit)
+            : data;
+        const idSet = new Set(filtered.map((d) => shortId(d.id)));
+
+        const nodes = filtered.map((d) => ({
+          ...d,
+          _id: shortId(d.id),
+          cited_by_count: d.cited_by_count || 0,
+          publication_year: d.publication_year || 2000,
+        }));
+
+        const links = [];
+        nodes.forEach((d) => {
+          const bib = d.bibliography;
+          if (!Array.isArray(bib)) return;
+          bib.forEach((ref) => {
+            const refId = shortId(ref);
+            if (idSet.has(refId) && refId !== d._id) {
+              links.push({ source: d._id, target: refId });
+            }
+          });
+        });
+
+        return { nodes, links };
+      }
+
+      function render(data, minCit) {
+        const { nodes, links } = buildNetwork(data, minCit);
+        if (!nodes.length) return;
+
+        const minY = d3.min(nodes, (d) => d.publication_year);
+        const maxY = d3.max(nodes, (d) => d.publication_year);
+        const totalCit = d3.sum(nodes, (d) => d.cited_by_count);
+
+        document.getElementById("statNodes").textContent =
+          nodes.length.toLocaleString();
+        document.getElementById("statEdges").textContent =
+          links.length.toLocaleString();
+        document.getElementById("statCitations").textContent =
+          totalCit.toLocaleString();
+        document.getElementById("statYears").textContent = `${minY} – ${maxY}`;
+        document.getElementById("legendMin").textContent = minY;
+        document.getElementById("legendMax").textContent = maxY;
+
+        const gradStops = YEAR_COLORS.map(
+          (c, i) =>
+            `${c} ${((i / (YEAR_COLORS.length - 1)) * 100).toFixed(0)}%`,
+        ).join(",");
+        document.getElementById("legendGradient").style.background =
+          `linear-gradient(to right, ${gradStops})`;
+
+        const W = document.getElementById("canvas").clientWidth;
+        const H = document.getElementById("canvas").clientHeight;
+
+        svgSel = d3.select("#svg").attr("width", W).attr("height", H);
+        svgSel.selectAll("*").remove();
+
+        const g = svgSel.append("g");
+
+        zoomBehavior = d3
+          .zoom()
+          .scaleExtent([0.05, 8])
+          .on("zoom", (e) => g.attr("transform", e.transform));
+        svgSel.call(zoomBehavior);
+
+        linkSel = g
+          .append("g")
+          .attr("class", "links")
+          .selectAll("line")
+          .data(links)
+          .join("line");
+
+        const nodeById = {};
+        nodes.forEach((n) => (nodeById[n._id] = n));
+
+        const tooltip = document.getElementById("tooltip");
+
+        nodeSel = g
+          .append("g")
+          .attr("class", "nodes")
+          .selectAll("g")
+          .data(nodes, (d) => d._id)
+          .join("g")
+          .attr("class", "node")
+          .call(
+            d3
+              .drag()
+              .on("start", (e, d) => {
+                if (!e.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+              })
+              .on("drag", (e, d) => {
+                d.fx = e.x;
+                d.fy = e.y;
+              })
+              .on("end", (e, d) => {
+                if (!e.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+              }),
+          )
+          .on("mouseover", (e, d) => {
+            tooltip.style.display = "block";
+            tooltip.innerHTML = `<strong>${d.title || "Untitled"}</strong>
+        <div class="tt-row">${d.publication_year} · ${(d.cited_by_count || 0).toLocaleString()} citations</div>
+        <div class="tt-row">${d.authors_count || 0} author${d.authors_count !== 1 ? "s" : ""}</div>`;
+          })
+          .on("mousemove", (e) => {
+            const rect = document
+              .getElementById("canvas")
+              .getBoundingClientRect();
+            let tx = e.clientX - rect.left + 14,
+              ty = e.clientY - rect.top - 10;
+            if (tx + 244 > W) tx = e.clientX - rect.left - 254;
+            tooltip.style.left = tx + "px";
+            tooltip.style.top = ty + "px";
+          })
+          .on("mouseout", () => {
+            tooltip.style.display = "none";
+          })
+          .on("click", (e, d) => {
+            e.stopPropagation();
+            selectNode(d, nodes, links, nodeById, minY, maxY);
+          });
+
+        nodeSel
+          .append("circle")
+          .attr("r", (d) => nodeRadius(d))
+          .attr("fill", (d) => yearColor(d.publication_year, minY, maxY))
+          .attr("stroke", (d) =>
+            d3.color(yearColor(d.publication_year, minY, maxY)).brighter(0.8),
+          )
+          .attr("stroke-width", 0.8);
+
+        svgSel.on("click", () => clearSelection(nodes));
+
+        const chargeVal = +document.getElementById("chargeSlider").value;
+        const linkVal = +document.getElementById("linkStrength").value;
+
+        if (simulation) simulation.stop();
+        simulation = d3
+          .forceSimulation(nodes)
+          .force(
+            "link",
+            d3
+              .forceLink(links)
+              .id((d) => d._id)
+              .distance(60)
+              .strength(linkVal),
+          )
+          .force("charge", d3.forceManyBody().strength(chargeVal))
+          .force("center", d3.forceCenter(W / 2, H / 2))
+          .force(
+            "collision",
+            d3.forceCollide((d) => nodeRadius(d) + 2),
+          )
+          .on("tick", () => {
+            linkSel
+              .attr("x1", (d) => d.source.x)
+              .attr("y1", (d) => d.source.y)
+              .attr("x2", (d) => d.target.x)
+              .attr("y2", (d) => d.target.y);
+            nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
+          })
+          .on("end", () => {
+            document.getElementById("loading").style.display = "none";
+          });
+
+        document.getElementById("loading").style.display = "flex";
+        document.getElementById("loading").querySelector("div+div") && null;
+      }
+
+      function selectNode(d, nodes, links, nodeById, minY, maxY) {
+        activeNodeId = d._id;
+
+        const connectedIds = new Set();
+        links.forEach((l) => {
+          const sid = typeof l.source === "object" ? l.source._id : l.source;
+          const tid = typeof l.target === "object" ? l.target._id : l.target;
+          if (sid === d._id) connectedIds.add(tid);
+          if (tid === d._id) connectedIds.add(sid);
+        });
+
+        nodeSel.classed(
+          "dimmed",
+          (n) => n._id !== d._id && !connectedIds.has(n._id),
+        );
+        linkSel.classed("highlighted", (l) => {
+          const sid = typeof l.source === "object" ? l.source._id : l.source;
+          const tid = typeof l.target === "object" ? l.target._id : l.target;
+          return sid === d._id || tid === d._id;
+        });
+
+        showSidebar(d, connectedIds, nodeById, minY, maxY);
+      }
+
+      function clearSelection(nodes) {
+        activeNodeId = null;
+        if (nodeSel) nodeSel.classed("dimmed", false);
+        if (linkSel) linkSel.classed("highlighted", false);
+        document.getElementById("sidebarEmpty").style.display = "flex";
+        document.getElementById("sidebarContent").style.display = "none";
+      }
+
+      function showSidebar(d, connectedIds, nodeById, minY, maxY) {
+        document.getElementById("sidebarEmpty").style.display = "none";
+        const sc = document.getElementById("sidebarContent");
+        sc.style.display = "flex";
+
+        const oa = (() => {
+          try {
+            return JSON.parse(d.open_access || "{}");
+          } catch (e) {
+            return {};
+          }
+        })();
+        const cnp = (() => {
+          try {
+            return JSON.parse(d.citation_normalized_percentile || "{}");
+          } catch (e) {
+            return {};
+          }
+        })();
+        const topPct = cnp.is_in_top_1_percent
+          ? "Top 1%"
+          : cnp.is_in_top_10_percent
+            ? "Top 10%"
+            : null;
+
+        const citsByYear = Array.isArray(d.citations_by_year_post_pub)
+          ? d.citations_by_year_post_pub
+          : [];
+        const recentCits = citsByYear.slice(-10);
+        const maxBarCit = Math.max(1, ...recentCits.map((r) => r.n_citations));
+
+        const connNodes = [...connectedIds]
+          .map((id) => nodeById[id])
+          .filter(Boolean)
+          .sort((a, b) => (b.cited_by_count || 0) - (a.cited_by_count || 0))
+          .slice(0, 8);
+
+        sc.innerHTML = `
+    <div class="sidebar-header">
+      <div class="sidebar-title">${d.title || "Untitled"}</div>
+      ${d.doi ? `<a class="sidebar-doi" href="${d.doi}" target="_blank">${d.doi.replace("https://doi.org/", "doi:")}</a>` : ""}
+    </div>
+    <div class="sidebar-body">
+      <div class="meta-grid">
+        <div class="meta-card">
+          <div class="meta-label">Citations</div>
+          <div class="meta-value">${(d.cited_by_count || 0).toLocaleString()}</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">Year</div>
+          <div class="meta-value">${d.publication_year || "—"}</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">FWCI</div>
+          <div class="meta-value">${d.fwci != null ? (+d.fwci).toFixed(2) : "—"}</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">Authors</div>
+          <div class="meta-value">${d.authors_count ?? "—"}</div>
+        </div>
+      </div>
+
+      <div class="tag-row">
+        ${oa.is_oa ? '<span class="tag oa">Open access</span>' : '<span class="tag closed">Closed</span>'}
+        ${topPct ? `<span class="tag" style="color:#a78bfa;border-color:rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">${topPct}</span>` : ""}
+        ${d.type ? `<span class="tag">${d.type}</span>` : ""}
+        ${d.language ? `<span class="tag">${d.language.toUpperCase()}</span>` : ""}
+        ${d.is_retracted === "true" ? '<span class="tag closed">Retracted</span>' : ""}
+      </div>
+
+      ${
+        recentCits.length
+          ? `
+      <div class="mini-chart">
+        <div class="section-label">Recent citations (last 10 years)</div>
+        ${recentCits
+          .map(
+            (r) => `
+          <div class="mini-bar-row">
+            <div class="mini-bar-label">${r.citing_year}</div>
+            <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${((r.n_citations / maxBarCit) * 100).toFixed(1)}%"></div></div>
+            <div class="mini-bar-val">${r.n_citations}</div>
+          </div>`,
+          )
+          .join("")}
+      </div>`
+          : ""
+      }
+
+      ${
+        connNodes.length
+          ? `
+      <div class="section-label">${connectedIds.size} connection${connectedIds.size !== 1 ? "s" : ""} in dataset</div>
+      <div class="connections-list">
+        ${connNodes
+          .map(
+            (n) => `
+          <div class="conn-item" onclick="highlightFromSidebar('${n._id}')">
+            <div>${n.title || n._id}</div>
+            <div class="conn-year">${n.publication_year} · ${(n.cited_by_count || 0).toLocaleString()} citations</div>
+          </div>`,
+          )
+          .join("")}
+        ${connectedIds.size > 8 ? `<div style="font-size:11px;color:#6b7280;padding:4px 2px;">…and ${connectedIds.size - 8} more</div>` : ""}
+      </div>`
+          : '<div style="font-size:12px;color:#6b7280;">No connections within dataset</div>'
+      }
+    </div>
+  `;
+      }
+
+      window.highlightFromSidebar = function (id) {
+        if (!nodeSel) return;
+        nodeSel.each(function (d) {
+          if (d._id === id) {
+            const event = new MouseEvent("click", { bubbles: true });
+            this.dispatchEvent(event);
+            svgSel
+              .transition()
+              .duration(600)
+              .call(zoomBehavior.translateTo, d.x, d.y);
+          }
+        });
+      };
+
+      function applySearch(query) {
+        if (!nodeSel) return;
+        if (!query) {
+          nodeSel.classed("dimmed", false);
+          return;
+        }
+        const q = query.toLowerCase();
+        nodeSel.classed(
+          "dimmed",
+          (d) =>
+            !(d.title || "").toLowerCase().includes(q) &&
+            !String(d.publication_year).includes(q) &&
+            !d._id.toLowerCase().includes(q),
+        );
+      }
+
+      document
+        .getElementById("minCitations")
+        .addEventListener("change", (e) => {
+          if (allData.length) render(allData, +e.target.value);
+        });
+
+      document.getElementById("linkStrength").addEventListener("input", () => {
+        if (simulation) {
+          simulation
+            .force("link")
+            .strength(+document.getElementById("linkStrength").value);
+          simulation.alpha(0.3).restart();
+        }
+      });
+      document.getElementById("chargeSlider").addEventListener("input", () => {
+        if (simulation) {
+          simulation
+            .force("charge")
+            .strength(+document.getElementById("chargeSlider").value);
+          simulation.alpha(0.3).restart();
+        }
+      });
+
+      let searchTimer;
+      document.getElementById("searchBox").addEventListener("input", (e) => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => applySearch(e.target.value.trim()), 250);
+      });
+
+      document.getElementById("zoomIn").onclick = () =>
+        svgSel.transition().duration(300).call(zoomBehavior.scaleBy, 1.5);
+      document.getElementById("zoomOut").onclick = () =>
+        svgSel.transition().duration(300).call(zoomBehavior.scaleBy, 0.67);
+      document.getElementById("zoomReset").onclick = () =>
+        svgSel
+          .transition()
+          .duration(400)
+          .call(zoomBehavior.transform, d3.zoomIdentity);
+
+      fetch("data/network_data.json")
+        .then((r) => {
+          if (!r.ok) throw new Error("Could not load network_data.json");
+          return r.json();
+        })
+        .then((data) => {
+          allData = data;
+          render(allData, 0);
+        })
+        .catch((err) => {
+          document.getElementById("loading").innerHTML =
+            `<div style="color:#f87171;font-size:13px;text-align:center;padding:24px;">
+        ⚠ ${err.message}<br><br>
+        <span style="color:#6b7280;font-size:11px;">Make sure network_data.json is in the same folder as this HTML file.</span>
+      </div>`;
+        });
+    </script>
+  </body>
+</html>
