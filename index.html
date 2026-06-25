@@ -108,13 +108,18 @@
       }
 
       .links line {
-        stroke: rgba(255, 255, 255, 0.06);
+        stroke: rgba(255, 255, 255, 0.2);
         stroke-width: 0.5;
-        transition: stroke 0.15s;
+        transition:
+          stroke 0.15s,
+          opacity 0.15s;
       }
       .links line.highlighted {
-        stroke: rgba(255, 255, 255, 0.4);
-        stroke-width: 1.2;
+        stroke: rgba(255, 255, 255, 0.7);
+        stroke-width: 1.5;
+      }
+      .links line.dimmed-reg {
+        opacity: 0.04;
       }
 
       /* landmark edges glow */
@@ -129,12 +134,11 @@
         stroke-width: 2.5;
         filter: drop-shadow(0 0 6px #fbbf24) drop-shadow(0 0 12px #f59e0b);
       }
-      /* hide landmark glow edges when something else is selected */
       .links line.landmark-edge.dimmed-edge {
-        stroke: rgba(255, 255, 255, 0.06);
+        stroke: rgba(255, 255, 255, 0.08);
         stroke-width: 0.5;
         filter: none;
-        opacity: 0.3;
+        opacity: 0.06;
       }
 
       .node circle {
@@ -146,12 +150,11 @@
         stroke-width: 2;
       }
       .node.dimmed circle {
-        opacity: 0.08;
-      }
-      .node.dimmed text {
         opacity: 0.03;
       }
-      /* suppress glow rings when node is dimmed */
+      .node.dimmed text {
+        opacity: 0.01;
+      }
       .node.landmark.dimmed circle.glow-ring,
       .node.landmark.dimmed circle.glow-ring2 {
         opacity: 0 !important;
@@ -164,7 +167,6 @@
         dominant-baseline: central;
       }
 
-      /* landmark node glow ring */
       .node.landmark circle.glow-ring {
         fill: none;
         stroke: #fbbf24;
@@ -175,12 +177,10 @@
       @keyframes pulse-ring {
         0%,
         100% {
-          r: var(--base-r-plus);
           opacity: 0.85;
           stroke-width: 2;
         }
         50% {
-          r: var(--base-r-plus2);
           opacity: 0.4;
           stroke-width: 1;
         }
@@ -428,35 +428,43 @@
         background: rgba(13, 15, 20, 0.92);
         border: 0.5px solid rgba(255, 255, 255, 0.1);
         border-radius: 8px;
-        padding: 10px 14px;
+        padding: 12px 14px;
         font-size: 11px;
         color: #9ca3af;
         pointer-events: none;
+        width: 260px;
       }
       .legend-title {
         font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         color: #6b7280;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
       }
       .legend-gradient {
-        width: 120px;
-        height: 6px;
+        width: 100%;
+        height: 5px;
         border-radius: 3px;
-        margin-bottom: 4px;
+        margin-bottom: 3px;
       }
       .legend-labels {
         display: flex;
         justify-content: space-between;
         font-size: 10px;
         color: #6b7280;
+        margin-bottom: 6px;
+      }
+      #yearDistCanvas {
+        width: 100%;
+        display: block;
       }
       .legend-size-row {
         display: flex;
         align-items: center;
         gap: 8px;
         margin-top: 10px;
+        border-top: 0.5px solid rgba(255, 255, 255, 0.07);
+        padding-top: 10px;
       }
       .legend-circle {
         border-radius: 50%;
@@ -536,7 +544,6 @@
         background: #222530;
       }
 
-      /* landmark toggle button */
       .toggle-btn {
         display: flex;
         align-items: center;
@@ -658,7 +665,16 @@
 
         <div id="legend">
           <div class="legend-title">Publication year</div>
-          <div class="legend-gradient" id="legendGradient"></div>
+          <canvas
+            id="yearDistCanvas"
+            height="72"
+            aria-label="Distribution of papers by publication era"
+          ></canvas>
+          <div
+            class="legend-gradient"
+            id="legendGradient"
+            style="margin-top: 4px"
+          ></div>
           <div class="legend-labels">
             <span id="legendMin"></span><span id="legendMax"></span>
           </div>
@@ -884,17 +900,89 @@
           bib.forEach((ref) => {
             const refId = shortId(ref);
             if (idSet.has(refId) && refId !== d._id) {
-              const srcLm = LANDMARK_IDS.has(d._id);
-              const tgtLm = LANDMARK_IDS.has(refId);
               links.push({
                 source: d._id,
                 target: refId,
-                isLandmarkEdge: srcLm || tgtLm,
+                isLandmarkEdge:
+                  LANDMARK_IDS.has(d._id) || LANDMARK_IDS.has(refId),
               });
             }
           });
         });
         return { nodes, links };
+      }
+
+      const ERAS = [
+        { label: "Pre-1900", test: (y) => y < 1900, color: "#4338ca" },
+        {
+          label: "1900–49",
+          test: (y) => y >= 1900 && y < 1950,
+          color: "#818cf8",
+        },
+        {
+          label: "1950–79",
+          test: (y) => y >= 1950 && y < 1980,
+          color: "#fbbf24",
+        },
+        {
+          label: "1980–99",
+          test: (y) => y >= 1980 && y < 2000,
+          color: "#d97706",
+        },
+        { label: "2000+", test: (y) => y >= 2000, color: "#92400e" },
+      ];
+
+      function drawYearDistribution(nodes) {
+        const canvas = document.getElementById("yearDistCanvas");
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.offsetWidth || 232;
+        const H = 72;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        const ctx = canvas.getContext("2d");
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, W, H);
+
+        const counts = ERAS.map((era) => ({
+          ...era,
+          count: nodes.filter((d) => era.test(d.publication_year)).length,
+          landmarks: nodes.filter(
+            (d) => era.test(d.publication_year) && d.isLandmark,
+          ).length,
+        }));
+
+        const maxCount = Math.max(...counts.map((c) => c.count), 1);
+        const n = counts.length;
+        const gap = 4;
+        const barW = (W - gap * (n - 1)) / n;
+        const padTop = 14;
+        const labelH = 18;
+        const chartH = H - padTop - labelH;
+
+        counts.forEach((c, i) => {
+          const x = i * (barW + gap);
+          const barH = Math.max(2, (c.count / maxCount) * chartH);
+          const y = padTop + chartH - barH;
+
+          ctx.fillStyle = c.color + "bb";
+          ctx.beginPath();
+          ctx.roundRect(x, y, barW, barH, [2, 2, 0, 0]);
+          ctx.fill();
+
+          if (c.landmarks > 0) {
+            ctx.fillStyle = "#fbbf24";
+            ctx.fillRect(x, y, barW, 3);
+          }
+
+          ctx.fillStyle = "rgba(255,255,255,0.6)";
+          ctx.font = `bold 9px -apple-system, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.fillText(c.count, x + barW / 2, y - 3);
+
+          ctx.fillStyle = c.color;
+          ctx.font = `9px -apple-system, sans-serif`;
+          ctx.fillText(c.label, x + barW / 2, H - 3);
+        });
       }
 
       function render(data, minCit) {
@@ -924,6 +1012,7 @@
           `linear-gradient(to right, ${gradStops})`;
         document.getElementById("legendMin").textContent = minY;
         document.getElementById("legendMax").textContent = maxY;
+        drawYearDistribution(nodes);
 
         const W = document.getElementById("canvas").clientWidth;
         const H = document.getElementById("canvas").clientHeight;
@@ -944,7 +1033,6 @@
           .on("zoom", (e) => g.attr("transform", e.transform));
         svgSel.call(zoomBehavior);
 
-        // split links: regular first, landmark on top
         const regularLinks = links.filter((l) => !l.isLandmarkEdge);
         const lmLinks = links.filter((l) => l.isLandmarkEdge);
 
@@ -958,19 +1046,14 @@
           .selectAll("line.lm")
           .data(lmLinks)
           .join("line")
-          .attr("class", (d) => (showLandmarks ? "lm landmark-edge" : "lm"));
+          .attr("class", () => (showLandmarks ? "lm landmark-edge" : "lm"));
 
-        linkSel = {
-          reg: regLinkSel,
-          lm: lmLinkSel,
-          all: linkG.selectAll("line"),
-        };
+        linkSel = { reg: regLinkSel, lm: lmLinkSel };
 
         const nodeById = {};
         nodes.forEach((n) => (nodeById[n._id] = n));
         const tooltip = document.getElementById("tooltip");
 
-        // render regular nodes first, landmarks on top
         const regularNodes = nodes.filter((d) => !d.isLandmark);
         const lmNodes = nodes.filter((d) => d.isLandmark);
 
@@ -1040,29 +1123,24 @@
           )
           .attr("stroke-width", 0.8);
 
-        // landmark nodes: glow rings + main circle
         lmNodeSel.each(function (d) {
           const el = d3.select(this);
           const r = nodeRadius(d);
           el.append("circle")
             .attr("class", "glow-ring2")
-            .attr("r", r + 6)
-            .style("--base-r-plus", r + 5 + "px")
-            .style("--base-r-plus2", r + 9 + "px");
+            .attr("r", r + 6);
           el.append("circle")
             .attr("class", "glow-ring")
-            .attr("r", r + 4)
-            .style("--base-r-plus", r + 4 + "px")
-            .style("--base-r-plus2", r + 7 + "px");
+            .attr("r", r + 4);
           el.append("circle")
             .attr("r", r)
-            .attr("fill", (d) => yearColor(d.publication_year, minY, maxY))
+            .attr("fill", yearColor(d.publication_year, minY, maxY))
             .attr("stroke", "#fbbf24")
             .attr("stroke-width", 1.5)
             .attr("filter", "url(#glow-filter)");
         });
 
-        svgSel.on("click", () => clearSelection(nodes));
+        svgSel.on("click", () => clearSelection());
 
         if (simulation) simulation.stop();
         simulation = d3
@@ -1108,18 +1186,18 @@
 
       function toggleLandmarks() {
         showLandmarks = !showLandmarks;
-        const btn = document.getElementById("landmarkToggle");
-        const dot = document.getElementById("landmarkDot");
-        btn.classList.toggle("off", !showLandmarks);
-        dot.classList.toggle("off", !showLandmarks);
-        if (linkSel) {
+        document
+          .getElementById("landmarkToggle")
+          .classList.toggle("off", !showLandmarks);
+        document
+          .getElementById("landmarkDot")
+          .classList.toggle("off", !showLandmarks);
+        if (linkSel)
           linkSel.lm.attr("class", showLandmarks ? "lm landmark-edge" : "lm");
-        }
-        if (nodeSel) {
+        if (nodeSel)
           svgSel
             .selectAll(".node.landmark")
             .style("display", showLandmarks ? null : "none");
-        }
       }
 
       function selectNode(d, nodes, links, nodeById, minY, maxY) {
@@ -1137,30 +1215,27 @@
         );
 
         if (linkSel) {
-          linkSel.reg.classed("highlighted", (l) => {
+          const isConnected = (l) => {
             const s = typeof l.source === "object" ? l.source._id : l.source;
             const t = typeof l.target === "object" ? l.target._id : l.target;
             return s === d._id || t === d._id;
-          });
+          };
+          linkSel.reg
+            .classed("highlighted", isConnected)
+            .classed("dimmed-reg", (l) => !isConnected(l));
           linkSel.lm
-            .classed("highlighted", (l) => {
-              const s = typeof l.source === "object" ? l.source._id : l.source;
-              const t = typeof l.target === "object" ? l.target._id : l.target;
-              return s === d._id || t === d._id;
-            })
-            .classed("dimmed-edge", (l) => {
-              const s = typeof l.source === "object" ? l.source._id : l.source;
-              const t = typeof l.target === "object" ? l.target._id : l.target;
-              return s !== d._id && t !== d._id;
-            });
+            .classed("highlighted", isConnected)
+            .classed("dimmed-edge", (l) => !isConnected(l));
         }
         showSidebar(d, connectedIds, nodeById, minY, maxY);
       }
 
-      function clearSelection(nodes) {
+      function clearSelection() {
         if (nodeSel) nodeSel.classed("dimmed", false);
         if (linkSel) {
-          linkSel.reg.classed("highlighted", false);
+          linkSel.reg
+            .classed("highlighted", false)
+            .classed("dimmed-reg", false);
           linkSel.lm
             .classed("highlighted", false)
             .classed("dimmed-edge", false);
