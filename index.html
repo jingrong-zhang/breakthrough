@@ -1192,12 +1192,54 @@
         document
           .getElementById("landmarkDot")
           .classList.toggle("off", !showLandmarks);
-        if (linkSel)
-          linkSel.lm.attr("class", showLandmarks ? "lm landmark-edge" : "lm");
-        if (nodeSel)
-          svgSel
-            .selectAll(".node.landmark")
-            .style("display", showLandmarks ? null : "none");
+
+        if (!showLandmarks) {
+          // turn off — restore everything
+          clearSelection();
+          return;
+        }
+
+        // turn on — highlight the full network of all landmark nodes
+        if (!nodeSel || !linkSel) return;
+
+        const connectedIds = new Set(LANDMARK_IDS);
+        // collect all nodes connected to any landmark
+        linkSel.lm.each(function (l) {
+          const s = typeof l.source === "object" ? l.source._id : l.source;
+          const t = typeof l.target === "object" ? l.target._id : l.target;
+          connectedIds.add(s);
+          connectedIds.add(t);
+        });
+        // also collect regular links that touch a landmark
+        linkSel.reg.each(function (l) {
+          const s = typeof l.source === "object" ? l.source._id : l.source;
+          const t = typeof l.target === "object" ? l.target._id : l.target;
+          if (LANDMARK_IDS.has(s) || LANDMARK_IDS.has(t)) {
+            connectedIds.add(s);
+            connectedIds.add(t);
+          }
+        });
+
+        nodeSel.classed("dimmed", (d) => !connectedIds.has(d._id));
+
+        const touchesLandmark = (l) => {
+          const s = typeof l.source === "object" ? l.source._id : l.source;
+          const t = typeof l.target === "object" ? l.target._id : l.target;
+          return LANDMARK_IDS.has(s) || LANDMARK_IDS.has(t);
+        };
+
+        linkSel.lm
+          .attr("class", "lm landmark-edge")
+          .classed("highlighted", true)
+          .classed("dimmed-edge", false);
+
+        linkSel.reg
+          .classed("highlighted", touchesLandmark)
+          .classed("dimmed-reg", (l) => !touchesLandmark(l));
+
+        // hide sidebar if open
+        document.getElementById("sidebarEmpty").style.display = "flex";
+        document.getElementById("sidebarContent").style.display = "none";
       }
 
       function selectNode(d, nodes, links, nodeById, minY, maxY) {
@@ -1238,7 +1280,14 @@
             .classed("dimmed-reg", false);
           linkSel.lm
             .classed("highlighted", false)
-            .classed("dimmed-edge", false);
+            .classed("dimmed-edge", false)
+            .attr("class", "lm landmark-edge");
+        }
+        // reset landmark toggle if it was active
+        if (showLandmarks) {
+          showLandmarks = false;
+          document.getElementById("landmarkToggle").classList.add("off");
+          document.getElementById("landmarkDot").classList.add("off");
         }
         document.getElementById("sidebarEmpty").style.display = "flex";
         document.getElementById("sidebarContent").style.display = "none";
