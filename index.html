@@ -864,6 +864,9 @@
         nodeSel,
         zoomBehavior;
       let showLandmarks = true;
+      let initialAnimationPlayed = false;
+      let userHasInteracted = false;
+      let savedTransform = null;
 
       function yearColor(year, minY, maxY) {
         const t = (year - minY) / Math.max(1, maxY - minY);
@@ -1030,8 +1033,20 @@
         zoomBehavior = d3
           .zoom()
           .scaleExtent([0.05, 8])
-          .on("zoom", (e) => g.attr("transform", e.transform));
+          .on("zoom", (e) => {
+            g.attr("transform", e.transform);
+            // Track that user has manually interacted (not a programmatic transform)
+            if (e.sourceEvent) {
+              userHasInteracted = true;
+              savedTransform = e.transform;
+            }
+          });
         svgSel.call(zoomBehavior);
+
+        // Restore saved transform immediately if re-rendering after user has interacted
+        if (savedTransform) {
+          svgSel.call(zoomBehavior.transform, savedTransform);
+        }
 
         const regularLinks = links.filter((l) => !l.isLandmarkEdge);
         const lmLinks = links.filter((l) => l.isLandmarkEdge);
@@ -1180,6 +1195,10 @@
           .on("end", () => {
             document.getElementById("loading").style.display = "none";
 
+            // Only run the opening cinematic once
+            if (initialAnimationPlayed) return;
+            initialAnimationPlayed = true;
+
             // find bounding box of all nodes for wide view
             const padding = 80;
             const xs = nodes.map((d) => d.x),
@@ -1218,10 +1237,17 @@
               .transition()
               .duration(2000)
               .ease(d3.easeCubicInOut)
-              .call(zoomBehavior.transform, targetTransform);
+              .call(zoomBehavior.transform, targetTransform)
+              .on("end", () => {
+                // Save the landing position so re-renders can restore it
+                if (!userHasInteracted) savedTransform = targetTransform;
+              });
           });
 
-        document.getElementById("loading").style.display = "flex";
+        // Only show the loading spinner on the very first render
+        if (!initialAnimationPlayed) {
+          document.getElementById("loading").style.display = "flex";
+        }
       }
 
       function toggleLandmarks() {
