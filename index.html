@@ -433,6 +433,13 @@
         color: #9ca3af;
         width: 260px;
       }
+      #legendBody {
+        overflow: hidden;
+        transition: opacity 0.2s;
+      }
+      #legendBody.collapsed {
+        display: none;
+      }
       .legend-title {
         font-size: 10px;
         text-transform: uppercase;
@@ -519,7 +526,7 @@
       .layout-switcher {
         display: flex;
         background: #1a1d24;
-        border: 0.5px solid rgba(255,255,255,0.12);
+        border: 0.5px solid rgba(255, 255, 255, 0.12);
         border-radius: 6px;
         overflow: hidden;
       }
@@ -530,41 +537,44 @@
         background: transparent;
         border: none;
         cursor: pointer;
-        transition: background 0.12s, color 0.12s;
+        transition:
+          background 0.12s,
+          color 0.12s;
         white-space: nowrap;
       }
       .layout-btn:first-child {
-        border-right: 0.5px solid rgba(255,255,255,0.08);
+        border-right: 0.5px solid rgba(255, 255, 255, 0.08);
       }
       .layout-btn.active {
-        background: rgba(99,102,241,0.18);
+        background: rgba(99, 102, 241, 0.18);
         color: #818cf8;
       }
       .layout-btn:hover:not(.active) {
-        background: rgba(255,255,255,0.05);
+        background: rgba(255, 255, 255, 0.05);
         color: #c4c9d4;
       }
 
       /* Timeline axis */
       .timeline-axis line {
-        stroke: rgba(255,255,255,0.06);
+        stroke: rgba(255, 255, 255, 0.06);
         stroke-width: 1;
       }
       .timeline-axis .decade-line {
-        stroke: rgba(255,255,255,0.10);
+        stroke: rgba(255, 255, 255, 0.1);
         stroke-width: 1;
-        stroke-dasharray: 3,5;
+        stroke-dasharray: 3, 5;
       }
       .timeline-axis .axis-label {
-        fill: rgba(255,255,255,0.25);
+        fill: rgba(255, 255, 255, 0.25);
         font-size: 10px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       .timeline-axis .axis-label-decade {
-        fill: rgba(255,255,255,0.18);
+        fill: rgba(255, 255, 255, 0.18);
         font-size: 9px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
+      .zoom-controls {
         position: absolute;
         top: 12px;
         right: 12px;
@@ -730,28 +740,46 @@
         <svg id="svg"></svg>
 
         <div id="legend">
-          <div class="legend-title">Publication year</div>
           <div
-            id="eraSwatches"
+            class="legend-title"
             style="
               display: flex;
-              flex-direction: column;
-              gap: 4px;
-              margin-top: 8px;
+              align-items: center;
+              justify-content: space-between;
+              cursor: pointer;
             "
-          ></div>
-          <div class="legend-size-row">
-            <div class="legend-circle" style="width: 6px; height: 6px"></div>
-            <span>few citations</span>
-            <div
-              class="legend-circle"
-              style="width: 14px; height: 14px; margin-left: 4px"
-            ></div>
-            <span>many</span>
+            onclick="toggleLegend()"
+          >
+            <span>Publication year</span>
+            <span
+              id="legendToggleIcon"
+              style="font-size: 10px; color: #6b7280; line-height: 1"
+              >▾</span
+            >
           </div>
-          <div class="legend-landmark-row">
-            <div class="legend-glow-dot"></div>
-            <span style="color: #fbbf24">Landmark paper</span>
+          <div id="legendBody">
+            <div
+              id="eraSwatches"
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                margin-top: 8px;
+              "
+            ></div>
+            <div class="legend-size-row">
+              <div class="legend-circle" style="width: 6px; height: 6px"></div>
+              <span>few citations</span>
+              <div
+                class="legend-circle"
+                style="width: 14px; height: 14px; margin-left: 4px"
+              ></div>
+              <span>many</span>
+            </div>
+            <div class="legend-landmark-row">
+              <div class="legend-glow-dot"></div>
+              <span style="color: #fbbf24">Landmark paper</span>
+            </div>
           </div>
         </div>
 
@@ -1743,6 +1771,13 @@
       }
 
       window.toggleEraFilter = toggleEraFilter;
+
+      window.toggleLegend = function () {
+        const body = document.getElementById("legendBody");
+        const icon = document.getElementById("legendToggleIcon");
+        const collapsed = body.classList.toggle("collapsed");
+        icon.textContent = collapsed ? "▸" : "▾";
+      };
 
       window.highlightFromSidebar = function (id) {
         if (!nodeSel) return;
