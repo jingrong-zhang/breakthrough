@@ -431,7 +431,6 @@
         padding: 12px 14px;
         font-size: 11px;
         color: #9ca3af;
-        pointer-events: none;
         width: 260px;
       }
       .legend-title {
@@ -517,7 +516,55 @@
         }
       }
 
-      .zoom-controls {
+      .layout-switcher {
+        display: flex;
+        background: #1a1d24;
+        border: 0.5px solid rgba(255,255,255,0.12);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .layout-btn {
+        padding: 4px 10px;
+        font-size: 11px;
+        color: #6b7280;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        transition: background 0.12s, color 0.12s;
+        white-space: nowrap;
+      }
+      .layout-btn:first-child {
+        border-right: 0.5px solid rgba(255,255,255,0.08);
+      }
+      .layout-btn.active {
+        background: rgba(99,102,241,0.18);
+        color: #818cf8;
+      }
+      .layout-btn:hover:not(.active) {
+        background: rgba(255,255,255,0.05);
+        color: #c4c9d4;
+      }
+
+      /* Timeline axis */
+      .timeline-axis line {
+        stroke: rgba(255,255,255,0.06);
+        stroke-width: 1;
+      }
+      .timeline-axis .decade-line {
+        stroke: rgba(255,255,255,0.10);
+        stroke-width: 1;
+        stroke-dasharray: 3,5;
+      }
+      .timeline-axis .axis-label {
+        fill: rgba(255,255,255,0.25);
+        font-size: 10px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .timeline-axis .axis-label-decade {
+        fill: rgba(255,255,255,0.18);
+        font-size: 9px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
         position: absolute;
         top: 12px;
         right: 12px;
@@ -597,6 +644,25 @@
           Landmark papers
         </button>
         <div class="control-group">
+          <label>Layout</label>
+          <div class="layout-switcher">
+            <button
+              class="layout-btn active"
+              id="layoutForce"
+              onclick="setLayout('force')"
+            >
+              Force
+            </button>
+            <button
+              class="layout-btn"
+              id="layoutTimeline"
+              onclick="setLayout('timeline')"
+            >
+              Timeline
+            </button>
+          </div>
+        </div>
+        <div class="control-group force-only-control">
           <label>Link strength</label>
           <input
             type="range"
@@ -607,7 +673,7 @@
             value="0.4"
           />
         </div>
-        <div class="control-group">
+        <div class="control-group force-only-control">
           <label>Charge</label>
           <input
             type="range"
@@ -665,19 +731,15 @@
 
         <div id="legend">
           <div class="legend-title">Publication year</div>
-          <canvas
-            id="yearDistCanvas"
-            height="72"
-            aria-label="Distribution of papers by publication era"
-          ></canvas>
           <div
-            class="legend-gradient"
-            id="legendGradient"
-            style="margin-top: 4px"
+            id="eraSwatches"
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 4px;
+              margin-top: 8px;
+            "
           ></div>
-          <div class="legend-labels">
-            <span id="legendMin"></span><span id="legendMax"></span>
-          </div>
           <div class="legend-size-row">
             <div class="legend-circle" style="width: 6px; height: 6px"></div>
             <span>few citations</span>
@@ -740,22 +802,30 @@
     </div>
 
     <script>
-      const YEAR_COLORS = [
-        "#312e81",
-        "#4338ca",
-        "#6366f1",
-        "#818cf8",
-        "#a5b4fc",
-        "#c7d2fe",
-        "#e0e7ff",
-        "#fef3c7",
-        "#fde68a",
-        "#fbbf24",
-        "#f59e0b",
-        "#d97706",
-        "#b45309",
-        "#92400e",
+      const ERAS = [
+        { label: "Pre-1900", test: (y) => y < 1900, color: "#6366f1" },
+        {
+          label: "1900–49",
+          test: (y) => y >= 1900 && y < 1950,
+          color: "#a5b4fc",
+        },
+        {
+          label: "1950–79",
+          test: (y) => y >= 1950 && y < 1980,
+          color: "#e8e4f0",
+        },
+        {
+          label: "1980–99",
+          test: (y) => y >= 1980 && y < 2000,
+          color: "#fbbf24",
+        },
+        { label: "2000+", test: (y) => y >= 2000, color: "#f97316" },
       ];
+
+      function yearColor(year) {
+        for (const era of ERAS) if (era.test(year)) return era.color;
+        return ERAS[ERAS.length - 1].color;
+      }
 
       const LANDMARK_META = {
         W4205193750: {
@@ -867,17 +937,19 @@
       let initialAnimationPlayed = false;
       let userHasInteracted = false;
       let savedTransform = null;
+      let currentLayout = "force"; // 'force' | 'timeline'
+      let currentNodes = [],
+        currentLinks = [],
+        currentMinY,
+        currentMaxY;
+      let activeEraFilter = null; // null = show all, string = era label
 
-      function yearColor(year, minY, maxY) {
-        const t = (year - minY) / Math.max(1, maxY - minY);
-        const i = Math.floor(t * (YEAR_COLORS.length - 1));
-        return YEAR_COLORS[Math.min(i, YEAR_COLORS.length - 1)];
-      }
       function nodeRadius(d) {
-        return Math.max(
+        const base = Math.max(
           4,
           Math.min(22, 3 + Math.sqrt(d.cited_by_count || 0) * 0.18),
         );
+        return currentLayout === "timeline" ? Math.max(2, base * 0.38) : base;
       }
       function shortId(url) {
         return url ? url.split("/").pop().toUpperCase() : "";
@@ -915,37 +987,7 @@
         return { nodes, links };
       }
 
-      const ERAS = [
-        { label: "Pre-1900", test: (y) => y < 1900, color: "#4338ca" },
-        {
-          label: "1900–49",
-          test: (y) => y >= 1900 && y < 1950,
-          color: "#818cf8",
-        },
-        {
-          label: "1950–79",
-          test: (y) => y >= 1950 && y < 1980,
-          color: "#fbbf24",
-        },
-        {
-          label: "1980–99",
-          test: (y) => y >= 1980 && y < 2000,
-          color: "#d97706",
-        },
-        { label: "2000+", test: (y) => y >= 2000, color: "#92400e" },
-      ];
-
       function drawYearDistribution(nodes) {
-        const canvas = document.getElementById("yearDistCanvas");
-        const dpr = window.devicePixelRatio || 1;
-        const W = canvas.offsetWidth || 232;
-        const H = 72;
-        canvas.width = W * dpr;
-        canvas.height = H * dpr;
-        const ctx = canvas.getContext("2d");
-        ctx.scale(dpr, dpr);
-        ctx.clearRect(0, 0, W, H);
-
         const counts = ERAS.map((era) => ({
           ...era,
           count: nodes.filter((d) => era.test(d.publication_year)).length,
@@ -953,44 +995,56 @@
             (d) => era.test(d.publication_year) && d.isLandmark,
           ).length,
         }));
-
         const maxCount = Math.max(...counts.map((c) => c.count), 1);
-        const n = counts.length;
-        const gap = 4;
-        const barW = (W - gap * (n - 1)) / n;
-        const padTop = 14;
-        const labelH = 18;
-        const chartH = H - padTop - labelH;
 
-        counts.forEach((c, i) => {
-          const x = i * (barW + gap);
-          const barH = Math.max(2, (c.count / maxCount) * chartH);
-          const y = padTop + chartH - barH;
-
-          ctx.fillStyle = c.color + "bb";
-          ctx.beginPath();
-          ctx.roundRect(x, y, barW, barH, [2, 2, 0, 0]);
-          ctx.fill();
-
-          if (c.landmarks > 0) {
-            ctx.fillStyle = "#fbbf24";
-            ctx.fillRect(x, y, barW, 3);
-          }
-
-          ctx.fillStyle = "rgba(255,255,255,0.6)";
-          ctx.font = `bold 9px -apple-system, sans-serif`;
-          ctx.textAlign = "center";
-          ctx.fillText(c.count, x + barW / 2, y - 3);
-
-          ctx.fillStyle = c.color;
-          ctx.font = `9px -apple-system, sans-serif`;
-          ctx.fillText(c.label, x + barW / 2, H - 3);
-        });
+        const container = document.getElementById("eraSwatches");
+        container.innerHTML = counts
+          .map((era) => {
+            const barPct = Math.max(4, (era.count / maxCount) * 100);
+            const isActive =
+              activeEraFilter === null || activeEraFilter === era.label;
+            const opacity = isActive ? 1 : 0.3;
+            const outline =
+              activeEraFilter === era.label
+                ? "1px solid rgba(255,255,255,0.4)"
+                : "none";
+            const lmBadge =
+              era.landmarks > 0
+                ? `<span style="font-size:10px;color:#fbbf24;width:20px;text-align:right;flex-shrink:0;" title="${era.landmarks} landmark paper${era.landmarks > 1 ? "s" : ""}">★${era.landmarks}</span>`
+                : `<span style="width:20px;flex-shrink:0;"></span>`;
+            return `
+          <div class="era-swatch-row" data-era="${era.label}"
+               onclick="window.toggleEraFilter('${era.label}')"
+               style="display:flex;align-items:center;gap:7px;padding:3px 4px;cursor:pointer;
+                      border-radius:4px;opacity:${opacity};outline:${outline};
+                      transition:opacity 0.15s;">
+            <div style="width:12px;height:12px;border-radius:3px;background:${era.color};
+                        flex-shrink:0;border:0.5px solid rgba(255,255,255,0.15);"></div>
+            <span style="font-size:10px;color:#9ca3af;width:52px;flex-shrink:0;">${era.label}</span>
+            <div style="flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;">
+              <div style="width:${barPct}%;height:100%;background:${era.color};border-radius:2px;opacity:0.8;"></div>
+            </div>
+            <span style="font-size:10px;color:#6b7280;width:26px;text-align:right;flex-shrink:0;">${era.count}</span>
+            ${lmBadge}
+          </div>`;
+          })
+          .join("");
       }
 
       function render(data, minCit) {
         const { nodes, links } = buildNetwork(data, minCit);
         if (!nodes.length) return;
+
+        // Reset layout to force on fresh render
+        currentLayout = "force";
+        activeEraFilter = null;
+        document.getElementById("layoutForce").classList.add("active");
+        document.getElementById("layoutTimeline").classList.remove("active");
+        document.querySelectorAll(".force-only-control").forEach((el) => {
+          el.style.opacity = "";
+          el.style.pointerEvents = "";
+        });
+        savedTransform = userHasInteracted ? savedTransform : null;
 
         const minY = d3.min(nodes, (d) => d.publication_year);
         const maxY = d3.max(nodes, (d) => d.publication_year);
@@ -1007,14 +1061,6 @@
         document.getElementById("statLandmarks").textContent =
           `${lmCount} / ${LANDMARK_IDS.size}`;
 
-        const gradStops = YEAR_COLORS.map(
-          (c, i) =>
-            `${c} ${((i / (YEAR_COLORS.length - 1)) * 100).toFixed(0)}%`,
-        ).join(",");
-        document.getElementById("legendGradient").style.background =
-          `linear-gradient(to right, ${gradStops})`;
-        document.getElementById("legendMin").textContent = minY;
-        document.getElementById("legendMax").textContent = maxY;
         drawYearDistribution(nodes);
 
         const W = document.getElementById("canvas").clientWidth;
@@ -1094,8 +1140,16 @@
                 })
                 .on("end", (e, d) => {
                   if (!e.active) simulation.alphaTarget(0);
-                  d.fx = null;
-                  d.fy = null;
+                  if (currentLayout === "timeline") {
+                    // Spring back: restore X lock, release Y so forceY pulls it back
+                    const xs = applyTimelineLayout._xScale;
+                    d.fx = xs ? xs(d.publication_year) : d.fx;
+                    d.fy = null;
+                    simulation.alpha(0.4).restart();
+                  } else {
+                    d.fx = null;
+                    d.fy = null;
+                  }
                 }),
             )
             .on("mouseover", (e, d) => {
@@ -1132,9 +1186,9 @@
         regNodeSel
           .append("circle")
           .attr("r", (d) => nodeRadius(d))
-          .attr("fill", (d) => yearColor(d.publication_year, minY, maxY))
+          .attr("fill", (d) => yearColor(d.publication_year))
           .attr("stroke", (d) =>
-            d3.color(yearColor(d.publication_year, minY, maxY)).brighter(0.8),
+            d3.color(yearColor(d.publication_year)).brighter(0.8),
           )
           .attr("stroke-width", 0.8);
 
@@ -1149,7 +1203,7 @@
             .attr("r", r + 4);
           el.append("circle")
             .attr("r", r)
-            .attr("fill", yearColor(d.publication_year, minY, maxY))
+            .attr("fill", yearColor(d.publication_year))
             .attr("stroke", "#fbbf24")
             .attr("stroke-width", 1.5)
             .attr("filter", "url(#glow-filter)");
@@ -1180,17 +1234,7 @@
             d3.forceCollide((d) => nodeRadius(d) + 2),
           )
           .on("tick", () => {
-            regLinkSel
-              .attr("x1", (d) => d.source.x)
-              .attr("y1", (d) => d.source.y)
-              .attr("x2", (d) => d.target.x)
-              .attr("y2", (d) => d.target.y);
-            lmLinkSel
-              .attr("x1", (d) => d.source.x)
-              .attr("y1", (d) => d.source.y)
-              .attr("x2", (d) => d.target.x)
-              .attr("y2", (d) => d.target.y);
-            nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
+            updatePositions();
           })
           .on("end", () => {
             document.getElementById("loading").style.display = "none";
@@ -1248,6 +1292,219 @@
         if (!initialAnimationPlayed) {
           document.getElementById("loading").style.display = "flex";
         }
+
+        // Store for layout switching
+        currentNodes = nodes;
+        currentLinks = links;
+        currentMinY = minY;
+        currentMaxY = maxY;
+      }
+
+      // ── Timeline layout ──────────────────────────────────────────────────────
+
+      function setLayout(mode) {
+        if (mode === currentLayout) return;
+        currentLayout = mode;
+        document
+          .getElementById("layoutForce")
+          .classList.toggle("active", mode === "force");
+        document
+          .getElementById("layoutTimeline")
+          .classList.toggle("active", mode === "timeline");
+
+        // Show/hide force-only controls
+        const forceOnlyControls = document.querySelectorAll(
+          ".force-only-control",
+        );
+        forceOnlyControls.forEach((el) => {
+          el.style.opacity = mode === "force" ? "1" : "0.35";
+          el.style.pointerEvents = mode === "force" ? "" : "none";
+        });
+
+        if (mode === "timeline") {
+          applyTimelineLayout();
+        } else {
+          applyForceLayout();
+        }
+      }
+
+      function applyTimelineLayout() {
+        if (!currentNodes.length || !svgSel) return;
+        if (simulation) simulation.stop();
+
+        const W = document.getElementById("canvas").clientWidth;
+        const H = document.getElementById("canvas").clientHeight;
+
+        const padL = 60,
+          padR = 40,
+          padT = 40,
+          padB = 40;
+        const innerW = W - padL - padR;
+        const innerH = H - padT - padB;
+
+        const xScale = d3
+          .scaleLinear()
+          .domain([currentMinY - 1, currentMaxY + 1])
+          .range([padL, padL + innerW]);
+
+        currentNodes.forEach((d) => {
+          d.fx = xScale(d.publication_year);
+          d.fy = null;
+        });
+
+        applyTimelineLayout._xScale = xScale;
+        applyTimelineLayout._pad = { padL, padR, padT, padB };
+
+        drawTimelineAxis(xScale, W, H, padL, padR, padT, padB);
+
+        simulation = d3
+          .forceSimulation(currentNodes)
+          .force("y", d3.forceY(H / 2).strength(0.015))
+          .force(
+            "collision",
+            d3.forceCollide((d) => nodeRadius(d) + 2).iterations(3),
+          )
+          .force("charge", d3.forceManyBody().strength(-6))
+          .alphaDecay(0.025)
+          .velocityDecay(0.5)
+          .on("tick", () => {
+            currentNodes.forEach((d) => {
+              d.y = Math.max(
+                padT + nodeRadius(d),
+                Math.min(H - padB - nodeRadius(d), d.y),
+              );
+            });
+            updatePositions();
+          })
+          .on("end", () => {
+            fitTimelineView(W, H, padL, padR);
+          });
+      }
+
+      function applyForceLayout() {
+        if (!currentNodes.length || !svgSel) return;
+
+        // Remove timeline axis (may be inside zoomable g or svg root)
+        svgSel.select(".timeline-axis-group").remove();
+        svgSel.select("g").select(".timeline-axis-group").remove();
+
+        // Release x lock
+        currentNodes.forEach((d) => {
+          d.fx = null;
+          d.fy = null;
+        });
+
+        const W = document.getElementById("canvas").clientWidth;
+        const H = document.getElementById("canvas").clientHeight;
+
+        if (simulation) simulation.stop();
+        simulation = d3
+          .forceSimulation(currentNodes)
+          .force(
+            "link",
+            d3
+              .forceLink(currentLinks)
+              .id((d) => d._id)
+              .distance(60)
+              .strength(+document.getElementById("linkStrength").value),
+          )
+          .force(
+            "charge",
+            d3
+              .forceManyBody()
+              .strength(+document.getElementById("chargeSlider").value),
+          )
+          .force("center", d3.forceCenter(W / 2, H / 2))
+          .force(
+            "collision",
+            d3.forceCollide((d) => nodeRadius(d) + 2),
+          )
+          .on("tick", updatePositions);
+      }
+
+      function updatePositions() {
+        if (!linkSel || !nodeSel) return;
+        linkSel.reg
+          .attr("x1", (d) => d.source.x)
+          .attr("y1", (d) => d.source.y)
+          .attr("x2", (d) => d.target.x)
+          .attr("y2", (d) => d.target.y);
+        linkSel.lm
+          .attr("x1", (d) => d.source.x)
+          .attr("y1", (d) => d.source.y)
+          .attr("x2", (d) => d.target.x)
+          .attr("y2", (d) => d.target.y);
+        nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
+      }
+
+      function drawTimelineAxis(xScale, W, H, padL, padR, padT, padB) {
+        // Remove old axis from wherever it lives
+        svgSel.select(".timeline-axis-group").remove();
+        d3.select("#svg g .timeline-axis-group").remove();
+
+        // Insert INSIDE the zoomable <g> (first child of svg's <g>) so it moves with pan/zoom
+        const zoomG = svgSel.select("g");
+        const axisG = zoomG
+          .insert("g", ":first-child")
+          .attr("class", "timeline-axis-group timeline-axis");
+
+        const minDecade = Math.floor(currentMinY / 10) * 10;
+        const maxDecade = Math.ceil(currentMaxY / 10) * 10;
+
+        for (let decade = minDecade; decade <= maxDecade; decade += 10) {
+          const x = xScale(decade);
+
+          // Vertical guide line — extends well beyond canvas in data coords
+          axisG
+            .append("line")
+            .attr("class", "decade-line")
+            .attr("x1", x)
+            .attr("y1", -9999)
+            .attr("x2", x)
+            .attr("y2", 9999);
+
+          // Decade label pinned near bottom of data space
+          axisG
+            .append("text")
+            .attr("class", "axis-label")
+            .attr("x", x)
+            .attr("y", H - padB + 18)
+            .attr("text-anchor", "middle")
+            .text(decade);
+        }
+
+        // Horizontal baseline
+        axisG
+          .append("line")
+          .attr("x1", padL - 20)
+          .attr("y1", H - padB)
+          .attr("x2", W - padR + 20)
+          .attr("y2", H - padB)
+          .attr("stroke", "rgba(255,255,255,0.07)")
+          .attr("stroke-width", 1);
+      }
+
+      function fitTimelineView(W, H, padL, padR) {
+        if (!zoomBehavior || !svgSel || !currentNodes.length) return;
+        // Compute actual bounding box of all settled nodes
+        const xs = currentNodes.map((d) => d.x);
+        const ys = currentNodes.map((d) => d.y);
+        const x0 = Math.min(...xs) - 20,
+          x1 = Math.max(...xs) + 20;
+        const y0 = Math.min(...ys) - 20,
+          y1 = Math.max(...ys) + 20;
+        const bw = x1 - x0,
+          bh = y1 - y0;
+        const scale = Math.min(W / bw, H / bh) * 0.88;
+        const tx = W / 2 - (scale * (x0 + x1)) / 2;
+        const ty = H / 2 - (scale * (y0 + y1)) / 2;
+        const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+        svgSel
+          .transition()
+          .duration(900)
+          .ease(d3.easeCubicOut)
+          .call(zoomBehavior.transform, transform);
+        savedTransform = transform;
       }
 
       function toggleLandmarks() {
@@ -1338,6 +1595,35 @@
         showSidebar(d, connectedIds, nodeById, minY, maxY);
       }
 
+      function toggleEraFilter(label) {
+        activeEraFilter = activeEraFilter === label ? null : label;
+        applyEraFilter();
+        drawYearDistribution(currentNodes);
+      }
+
+      function applyEraFilter() {
+        if (!nodeSel) return;
+        if (activeEraFilter === null) {
+          nodeSel.classed("dimmed", false);
+          if (linkSel) {
+            linkSel.reg.classed("dimmed-reg", false);
+            linkSel.lm.classed("dimmed-edge", false);
+          }
+        } else {
+          const era = ERAS.find((e) => e.label === activeEraFilter);
+          nodeSel.classed("dimmed", (d) => !era.test(d.publication_year));
+          if (linkSel) {
+            const linkInEra = (l) => {
+              const sy = (l.source && l.source.publication_year) || l.source;
+              const ty = (l.target && l.target.publication_year) || l.target;
+              return era.test(sy) && era.test(ty);
+            };
+            linkSel.reg.classed("dimmed-reg", (l) => !linkInEra(l));
+            linkSel.lm.classed("dimmed-edge", (l) => !linkInEra(l));
+          }
+        }
+      }
+
       function clearSelection() {
         if (nodeSel) nodeSel.classed("dimmed", false);
         if (linkSel) {
@@ -1349,6 +1635,9 @@
             .classed("dimmed-edge", false)
             .attr("class", "lm landmark-edge");
         }
+        // Reset era filter
+        activeEraFilter = null;
+        drawYearDistribution(currentNodes);
         // reset landmark toggle if it was active
         if (showLandmarks) {
           showLandmarks = false;
@@ -1452,6 +1741,8 @@
       }
     </div>`;
       }
+
+      window.toggleEraFilter = toggleEraFilter;
 
       window.highlightFromSidebar = function (id) {
         if (!nodeSel) return;
